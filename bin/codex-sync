@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+diagnostic() {
+	local color=$1 message=$2
+	if [[ -t 2 && ! ${NO_COLOR+x} ]]; then
+		printf '\033[%sm%s\033[0m\n' "$color" "$message" >&2
+	else
+		printf '%s\n' "$message" >&2
+	fi
+}
+fail() {
+	diagnostic 31 "codex-sync: $*"
+	exit 1
+}
+usage() {
+	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete] [project]' '       codex-sync --help | --version'
+}
+valid_name() { [[ $1 =~ ^[a-zA-Z0-9_-]([a-zA-Z0-9_.-]*[a-zA-Z0-9_-])?$ ]]; }
+optional_file() {
+	if [[ -e $1 || -L $1 ]]; then
+		[[ -f $1 && -r $1 ]] || fail "Not a readable file: $1"
+	fi
+}
+
+[[ $# -gt 0 ]] || {
+	usage >&2
+	exit 2
+}
+case $1 in
+--help)
+	usage
+	exit 0
+	;;
+--version)
+	printf 'codex-sync 0.1.0\n'
+	exit 0
+	;;
+push | pull)
+	direction=$1
+	shift
+	;;
+*) fail "Expected push or pull (see --help)" ;;
+esac
+project=''
+has_project=false
+dry_run=false
+delete=true
+for arg in "$@"; do
+	case $arg in
+	--help)
+		usage
+		exit 0
+		;;
+	--version)
+		printf 'codex-sync 0.1.0\n'
+		exit 0
+		;;
+	--dry-run) dry_run=true ;;
+	--no-delete) delete=false ;;
+	--*) fail "Unknown option: $arg" ;;
+	*)
+		$has_project && fail 'Only one project name is allowed'
+		project=$arg
+		has_project=true
+		;;
+	esac
+done
+config=${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync
+host=codex
+optional_file "$config/target-host"
+if [[ -f $config/target-host ]]; then host=$(cat -- "$config/target-host"); fi
+[[ $host =~ ^([a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || fail 'Invalid target-host: expected one SSH host name or alias'
+roots=()
+optional_file "$config/project-folders"
+if [[ -f $config/project-folders ]]; then
+	while IFS= read -r root || [[ -n $root ]]; do
+		[[ -z $root || $root == \#* ]] && continue
+		if [[ $root == \~/* ]]; then root=$HOME/${root:2}; fi
+		[[ $root == /* ]] || fail "Project search root must be absolute: $root"
+		[[ -d $root ]] || fail "Project search root does not exist: $root"
+		roots+=("$root")
+	done <"$config/project-folders"
+fi
+if $has_project; then
+	valid_name "$project" || fail "Invalid project name: $project"
+	local_dir=''
+	if [[ -d ./$project ]]; then local_dir=./$project; else
+		for root in "${roots[@]}"; do
+			if [[ -d $root/$project ]]; then
+				local_dir=$root/$project
+				break
+			fi
+		done
+	fi
+	[[ -n $local_dir ]] || fail "Missing local project: $project"
+else
+	local_dir=.
+fi
+local_dir=$(cd -- "$local_dir" && pwd -P) || fail 'Cannot resolve local project'
+if ! $has_project; then project=${local_dir##*/}; fi
+valid_name "$project" || fail "Invalid project name: $project"
+home_dir=$(cd -- "$HOME" && pwd -P) || fail 'Cannot resolve home directory'
+[[ $local_dir != / && $local_dir != "$home_dir" ]] || fail 'Refusing to synchronize filesystem root or home directory'
+[[ -f $local_dir/.codexignore && -r $local_dir/.codexignore ]] || fail "Required local project ignore file is missing or not a readable regular file: $local_dir/.codexignore (create it; an empty file is valid)"
+excludes=()
+for pattern in '.git/' '.ssh/' '.codexignore'; do
+	excludes+=("--exclude=$pattern")
+done
+for ignore in "$config/ignore" "$local_dir/.codexignore"; do
+	optional_file "$ignore"
+	if [[ -f $ignore ]]; then
+		# rsync's list-clearing token would remove the mandatory exclusions.
+		while IFS= read -r pattern || [[ -n $pattern ]]; do
+			[[ $pattern != '!' && $pattern != $'!\r' ]] || fail "Ignore file cannot clear mandatory exclusions: $ignore"
+		done <"$ignore"
+		excludes+=("--exclude-from=$ignore")
+	fi
+done
+command -v ssh >/dev/null || fail 'OpenSSH client (ssh) is required'
+command -v rsync >/dev/null || fail 'rsync is required'
+# Project names contain no shell syntax. Reject remote symlinks resolving to / or HOME.
+remote_check="p=\"\$HOME/$project\"; test -d \"\$p\" && r=\$(cd -- \"\$p\" && pwd -P) && h=\$(cd -- \"\$HOME\" && pwd -P) && test \"\$r\" != / && test \"\$r\" != \"\$h\""
+# Only the validated project name expands locally; remote variables remain escaped.
+# shellcheck disable=SC2029
+ssh "$host" "$remote_check" || fail "Remote project missing, unsafe, or inaccessible: $host:~/$project"
+local_path=$local_dir/
+remote_path="$host:~/$project/"
+if [[ $direction == push ]]; then
+	source=$local_path
+	destination=$remote_path
+else
+	source=$remote_path
+	destination=$local_path
+fi
+options=(-av)
+if $delete; then
+	options+=(--delete)
+	diagnostic 33 "WARNING: destination-only files may be permanently deleted$(if $dry_run; then printf ' (dry-run preview only)'; fi)."
+fi
+if $dry_run; then options+=(--dry-run); fi
+printf '%s: %s -> %s\n' "$direction" "$source" "$destination"
+rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
