@@ -34,7 +34,7 @@ Installation does not require sudo or modify your shell configuration. Existing 
 
 Both local and remote project directories must already exist. `codex-sync` does not create them.
 
-Each local project must contain a `.codexignore` file, even if empty:
+Each local project must have a `.codexignore` in its directory or a parent, even if empty:
 
 ```bash
 touch .codexignore
@@ -130,9 +130,9 @@ These exclusions apply to every project, in addition to its `.codexignore`.
 
 ## Exclusions & Security
 
-**Every local project must contain a readable `.codexignore` file.** This applies to both push and pull operations.
+**Every local project must have a readable `.codexignore` file in its directory or a parent.** For both push and pull, search starts at the resolved local project and walks through its physical parents up to filesystem root, using only the nearest entry. Without a project argument this starts at cwd; with a name it starts at the selected local project, even when launched elsewhere. Remote paths are never searched. There is no explicit ignore-path override.
 
-An empty file is accepted, but a missing or unreadable file prevents synchronization.
+An empty file is accepted. No file, or a nearest entry that is unreadable, a dangling symlink, or not a regular file, prevents synchronization; invalid entries are never skipped for a parent file. Patterns retain rsync semantics relative to the transfer root, even when inherited.
 
 Only three patterns are excluded automatically:
 
@@ -169,9 +169,11 @@ Use `.codexignore` to explicitly exclude sensitive content and `cpush --dry-run`
 
 Both `cpush` and `cpull` can delete destination-only files because `--delete` is enabled by default. Use `--no-delete` when you want to preserve them.
 
+Real syncs with deletion enabled display `⚠️ Sync will delete destination-only files.` The warning is suppressed with `--dry-run` or `--no-delete`.
+
 Excluded destination files are not removed by the normal exclusion behavior.
 
-Errors are displayed in red and deletion warnings in yellow when supported by the terminal. Colors are disabled for redirected diagnostics or when `NO_COLOR` is set. SSH and rsync output remains unchanged.
+Human-facing messages use ❌ for errors, ⚠️ for warnings, ℹ️ for transfer information, and ✅ for installation/removal success. Help, version, and SSH/rsync output remain unchanged. Errors are displayed in red and deletion warnings in yellow when supported by the terminal. Colors are disabled for redirected diagnostics or when `NO_COLOR` is set. SSH and rsync output remains unchanged.
 
 ## Uninstallation
 

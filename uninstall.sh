@@ -11,9 +11,9 @@ for name in codex-sync cpush cpull; do
 	[[ -e $path || -L $path ]] || continue
 	if [[ -f $path && ! -L $path ]] && cmp -s -- "$base/bin/$name" "$path"; then
 		rm -- "$path"
-		printf 'Removed %s\n' "$path"
+		printf '✅ Removed %s\n' "$path"
 	else
-		printf 'Preserved modified or unrelated command: %s\n' "$path" >&2
+		printf '⚠️ Preserved modified or unrelated command: %s\n' "$path" >&2
 		status=1
 	fi
 done

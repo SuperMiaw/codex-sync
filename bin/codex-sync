@@ -10,7 +10,7 @@ diagnostic() {
 	fi
 }
 fail() {
-	diagnostic 31 "codex-sync: $*"
+	diagnostic 31 "❌ codex-sync: $*"
 	exit 1
 }
 usage() {
@@ -102,12 +102,25 @@ if ! $has_project; then project=${local_dir##*/}; fi
 valid_name "$project" || fail "Invalid project name: $project"
 home_dir=$(cd -- "$HOME" && pwd -P) || fail 'Cannot resolve home directory'
 [[ $local_dir != / && $local_dir != "$home_dir" ]] || fail 'Refusing to synchronize filesystem root or home directory'
-[[ -f $local_dir/.codexignore && -r $local_dir/.codexignore ]] || fail "Required local project ignore file is missing or not a readable regular file: $local_dir/.codexignore (create it; an empty file is valid)"
+# Walk physical local parents only; an invalid nearest entry must not be skipped.
+ignore_dir=$local_dir
+project_ignore=''
+while :; do
+	candidate=${ignore_dir%/}/.codexignore
+	if [[ -e $candidate || -L $candidate ]]; then
+		project_ignore=$candidate
+		break
+	fi
+	[[ $ignore_dir != / ]] || break
+	ignore_dir=${ignore_dir%/*}
+	[[ -n $ignore_dir ]] || ignore_dir=/
+done
+[[ -n $project_ignore && -f $project_ignore && -r $project_ignore ]] || fail "Required local project ignore file is missing or not a readable regular file: ${project_ignore:-$local_dir/.codexignore} (searched local project and parents; create it; an empty file is valid)"
 excludes=()
 for pattern in '.git/' '.ssh/' '.codexignore'; do
 	excludes+=("--exclude=$pattern")
 done
-for ignore in "$config/ignore" "$local_dir/.codexignore"; do
+for ignore in "$config/ignore" "$project_ignore"; do
 	optional_file "$ignore"
 	if [[ -f $ignore ]]; then
 		# rsync's list-clearing token would remove the mandatory exclusions.
@@ -136,8 +149,8 @@ fi
 options=(-av)
 if $delete; then
 	options+=(--delete)
-	diagnostic 33 "WARNING: destination-only files may be permanently deleted$(if $dry_run; then printf ' (dry-run preview only)'; fi)."
+	if ! $dry_run; then diagnostic 33 '⚠️ Sync will delete destination-only files.'; fi
 fi
 if $dry_run; then options+=(--dry-run); fi
-printf '%s: %s -> %s\n' "$direction" "$source" "$destination"
+printf 'ℹ️ %s: %s -> %s\n' "$direction" "$source" "$destination"
 rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"

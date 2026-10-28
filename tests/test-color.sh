@@ -6,10 +6,10 @@ unset NO_COLOR
 cd "$tmp/work/demo"
 escape=$'\033'
 run push
-[[ $(cat "$tmp/err") == 'WARNING: destination-only files may be permanently deleted.' ]]
+[[ $(cat "$tmp/err") == '⚠️ Sync will delete destination-only files.' ]]
 [[ $(cat "$tmp/out") != *"$escape"* ]]
 reject invalid
-[[ $(cat "$tmp/err") == 'codex-sync: Expected push or pull (see --help)' ]]
+[[ $(cat "$tmp/err") == '❌ codex-sync: Expected push or pull (see --help)' ]]
 ok 'redirected warnings and errors contain no color'
 
 if ! command -v script >/dev/null; then
@@ -33,10 +33,10 @@ terminal() {
 	script -q -e -c color-runner /dev/null >"$tmp/terminal"
 }
 terminal warning
-[[ $(cat "$tmp/terminal") == *"${escape}[33mWARNING: destination-only files may be permanently deleted.${escape}[0m"* ]]
+[[ $(cat "$tmp/terminal") == *"${escape}[33m⚠️ Sync will delete destination-only files.${escape}[0m"* ]]
 [[ $(cat "$tmp/stdout") != *"$escape"* ]]
 if terminal error; then exit 1; fi
-[[ $(cat "$tmp/terminal") == *"${escape}[31mcodex-sync: Expected push or pull (see --help)${escape}[0m"* ]]
+[[ $(cat "$tmp/terminal") == *"${escape}[31m❌ codex-sync: Expected push or pull (see --help)${escape}[0m"* ]]
 ok 'terminal stderr colors warnings yellow and errors red with resets'
 for value in '' 1; do
 	export NO_COLOR=$value
@@ -63,6 +63,6 @@ printf 'ssh stdout\n'
 printf 'ssh stderr\n' >&2
 MOCK
 run push --no-delete
-[[ $(cat "$tmp/out") == $'ssh stdout\npush: '*$'\nrsync stdout\033[35munchanged\033[0m' ]]
+[[ $(cat "$tmp/out") == $'ssh stdout\nℹ️ push: '*$'\nrsync stdout\033[35munchanged\033[0m' ]]
 [[ $(cat "$tmp/err") == $'ssh stderr\nrsync stderr\033[36munchanged\033[0m' ]]
 ok 'SSH and rsync output passes through unchanged'
