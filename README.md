@@ -1,150 +1,59 @@
 # codex-sync
 
-A lightweight Bash CLI to synchronize local projects with a remote Codex sandbox using SSH and rsync.
+Synchronize existing local project directories with matching directories on a remote host over SSH and rsync. Use `cpush` for local → remote and `cpull` for remote → local.
 
-- Bidirectional synchronization with `cpush` and `cpull`
-- No Git dependency
-- Configurable SSH target and project search paths
-- Project-specific and global exclusions
-- No remote provisioning
-
-**Requirements:** Debian/Linux, Bash, OpenSSH and rsync.
+**Requirements:** Debian/Linux, Bash, OpenSSH, and rsync. The remote host must be accessible over SSH and have rsync installed.
 
 ## Installation
+
+From the source directory:
 
 ```bash
 ./install.sh
 ```
 
-Installs three commands into `~/.local/bin`:
-
-- `codex-sync` — main CLI
-- `cpush` — push local files to the remote host
-- `cpull` — pull remote files to the local project
-
-Make sure `~/.local/bin` is in your `PATH`:
+Installs `codex-sync`, `cpush`, and `cpull` into `~/.local/bin` without sudo or changes to your shell configuration. Ensure that directory is in your `PATH`:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Installation does not require sudo or modify your shell configuration. Existing commands are not overwritten without confirmation. Use `./install.sh --force` for noninteractive replacement.
-
-## Usage
-
-Both local and remote project directories must already exist. `codex-sync` does not create them.
-
-Each local project must have a `.codexignore` in its directory or a parent, even if empty:
-
-```bash
-touch .codexignore
-```
-
-### Synchronize the current project
-
-```bash
-cpush                 # Local → remote
-cpull                 # Remote → local
-```
-
-### Synchronize a named project
-
-```bash
-cpush my-project
-cpull my-project
-```
-
-### Preview changes
-
-```bash
-cpush --dry-run
-cpull --dry-run
-```
-
-### Synchronize without deleting destination files
-
-```bash
-cpush --no-delete
-cpull --no-delete
-```
-
-The equivalent main CLI commands are `codex-sync push` and `codex-sync pull`. Other options: `--help`, `--version`.
-
-**Important:** Synchronization uses `rsync -av --delete` by default. Files present only at the destination may be permanently deleted. Preview with `--dry-run` first.
-
-### Project resolution
-
-Without an argument, the current directory is used as the project.
-
-With a project name, `codex-sync` searches in this order:
-
-1. `./<project-name>`
-2. Each directory configured in `project-folders`
-
-The first match is used. The corresponding remote directory is always:
-
-```text
-<target-host>:~/<project-name>/
-```
-
-Project names cannot contain paths or unsafe characters. Synchronizing the filesystem root or home directory is prohibited.
+Replacing different existing commands requires confirmation; use `./install.sh --force` for noninteractive replacement.
 
 ## Configuration
 
-Configuration files live in `~/.config/codex-sync/`, or under `$XDG_CONFIG_HOME/codex-sync/` when configured.
+Optional configuration files live in `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync/`:
 
-All three configuration files are optional.
+| File | Purpose | Example contents |
+|---|---|---|
+| `target-host` | SSH host name or alias; defaults to `codex` | `my-sandbox` |
+| `project-folders` | Additional local search directories, one per line | `~/projects` |
+| `ignore` | Global rsync exclusion patterns, one per line | `*.log` |
 
-| File | Purpose |
-|---|---|
-| `target-host` | SSH hostname or alias; defaults to `codex` |
-| `project-folders` | Additional local directories to search |
-| `ignore` | Global rsync exclusion patterns |
+Create the configuration directory before adding files. In `project-folders`, use existing absolute paths or the `~/` shortcut; spaces within paths are supported. Blank lines and lines starting with `#` are ignored.
 
-### Example: target-host
+## Usage
 
-```text
-codex
+Both local and remote project directories must already exist. With no project argument, the current directory is the project and its basename is the remote project name. With a name, lookup checks `./<name>` first, then `project-folders` in order. The remote directory is always `~/<name>` on the configured host.
+
+Use a project name, not a path. Names may contain ASCII letters, digits, underscores, hyphens, and internal dots. Synchronizing the filesystem root or your home directory is prohibited.
+
+```bash
+cpush                        # Push the current project
+cpull my-project             # Pull a named project
+cpush --dry-run              # Preview changes, including planned deletions
+cpull --no-delete my-project  # Pull while preserving destination-only files
 ```
 
-An SSH alias from `~/.ssh/config` can be used.
+Both wrappers accept `--dry-run` and `--no-delete`, which can be combined. Equivalent commands are `codex-sync push` and `codex-sync pull`; use `codex-sync --help` for help.
 
-### Example: project-folders
+**Both push and pull delete destination-only files by default. Deletions may be permanent.** Preview with `--dry-run` before syncing, or use `--no-delete` to preserve destination-only files. Excluded destination files are preserved.
 
-```text
-~/projects
-~/work
-/opt/work projects
-```
+## .codexignore and secrets
 
-One directory per line. Paths must be absolute, except for the supported `~/` shortcut. Empty lines and comments beginning with `#` are ignored.
+Every local project needs a readable `.codexignore` file in its directory or a parent, even for pulls. An empty file is valid. Only the nearest file is used; an invalid nearest file prevents synchronization.
 
-### Example: ignore
-
-```text
-*.log
-.cache/
-```
-
-These exclusions apply to every project, in addition to its `.codexignore`.
-
-## Exclusions & Security
-
-**Every local project must have a readable `.codexignore` file in its directory or a parent.** For both push and pull, search starts at the resolved local project and walks through its physical parents up to filesystem root, using only the nearest entry. Without a project argument this starts at cwd; with a name it starts at the selected local project, even when launched elsewhere. Remote paths are never searched. There is no explicit ignore-path override.
-
-An empty file is accepted. No file, or a nearest entry that is unreadable, a dangling symlink, or not a regular file, prevents synchronization; invalid entries are never skipped for a parent file. Patterns retain rsync semantics relative to the transfer root, even when inherited.
-
-Only three patterns are excluded automatically:
-
-```text
-.git/
-.ssh/
-.codexignore
-```
-
-All other exclusions are your responsibility.
-
-For example, a project's `.codexignore` might contain:
+For example, create `.codexignore` in your project with:
 
 ```text
 .env
@@ -155,25 +64,9 @@ node_modules/
 build/
 ```
 
-The global `ignore` file and `.codexignore` use rsync exclusion patterns. Exclusions are cumulative and apply in both directions. The `!` rule that clears exclusions is not allowed.
+Patterns use rsync exclusion syntax relative to the project being transferred, including when inherited from a parent. They apply in both directions and combine with the optional global `ignore` file. The list-clearing `!` rule is not allowed.
 
-### Sensitive data
-
-**Review your project before pushing files to a remote environment.**
-
-Credentials, private keys, environment files and other sensitive data are not automatically detected or excluded.
-
-Use `.codexignore` to explicitly exclude sensitive content and `cpush --dry-run` to preview synchronization. A dry run and exclusion rules do not guarantee that sensitive files cannot be transferred.
-
-### Deletion behavior
-
-Both `cpush` and `cpull` can delete destination-only files because `--delete` is enabled by default. Use `--no-delete` when you want to preserve them.
-
-Real syncs with deletion enabled display `⚠️ Sync will delete destination-only files.` The warning is suppressed with `--dry-run` or `--no-delete`.
-
-Excluded destination files are not removed by the normal exclusion behavior.
-
-Human-facing messages use ❌ for errors, ⚠️ for warnings, ℹ️ for transfer information, and ✅ for installation/removal success. Help, version, and SSH/rsync output remain unchanged. Errors are displayed in red and deletion warnings in yellow when supported by the terminal. Colors are disabled for redirected diagnostics or when `NO_COLOR` is set. SSH and rsync output remains unchanged.
+Only `.git/`, `.ssh/`, and `.codexignore` are automatically excluded. **Other credentials, private keys, environment files, and secrets are not automatically detected or excluded.** Review your project, add appropriate exclusions, and preview with `cpush --dry-run`. Exclusion rules and dry runs do not guarantee that secrets cannot be transferred.
 
 ## Uninstallation
 
@@ -183,4 +76,4 @@ From the source directory:
 ./uninstall.sh
 ```
 
-Only installed commands matching the current source version are removed. Modified or unrelated commands are preserved. Configuration files and project `.codexignore` files are never removed.
+Removes installed commands matching the current source version and preserves modified or unrelated commands. Configuration and project `.codexignore` files are preserved.

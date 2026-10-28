@@ -32,4 +32,10 @@ Write self-contained Bash tests under `tests/`, mocking SSH/rsync where possible
 
 Before reporting completion, run `bash -n`, shfmt checks, ShellCheck (when available), and tests. State which checks passed or could not run.
 
-Keep the README concise: dependencies, installation, commands, configuration examples, exclusions, destructive-sync warning, and uninstall behavior. Do not initialize Git unless explicitly requested. Preserve unrelated user changes and report deviations from the specification.
+## Documentation audiences
+
+README.md is for end users only: what the tool does, requirements, installation, concise usage and configuration examples, `.codexignore` usage, important deletion and secrets warnings, and useful uninstall guidance. Do not include license discussion, how-to-develop guidance, agent instructions, testing commentary, architecture internals, or implementation notes.
+
+Keep durable agent and developer instructions in AGENTS.md. Keep detailed behavioral contracts and edge cases in the authoritative `specs/` files; avoid duplicating them in README.md or AGENTS.md. Keep the user-facing facts and safety notices in README.md consistent with those contracts.
+
+Do not initialize Git unless explicitly requested. Preserve unrelated user changes and report deviations from the specification.
