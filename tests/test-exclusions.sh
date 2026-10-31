@@ -29,7 +29,7 @@ for direction in push pull; do
 	reject "$direction"
 	[[ ! -e $LOG.ssh ]]
 	grep -Fq "$HOME/projects/demo/.codexignore" "$tmp/err"
-	grep -Fq 'empty file is valid' "$tmp/err"
+	grep -Fq 'Noninteractive context' "$tmp/err"
 	mkdir "$HOME/projects/demo/.codexignore"
 	reject "$direction"
 	[[ ! -e $LOG.ssh ]]

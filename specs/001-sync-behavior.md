@@ -4,7 +4,7 @@ Status: agreed functional specification
 
 ## Goal
 
-`codex-sync` synchronizes an existing local project directory with the matching existing directory on an SSH-accessible sandbox host, using rsync. It is independent of Git and does not create, provision, or deploy projects.
+`codex-sync` synchronizes an existing local project directory with the matching existing directory on an SSH-accessible sandbox host, using rsync. Git is optional and used only as a missing-marker creation hint; the tool does not create, provision, or deploy project directories.
 
 ## Commands
 
@@ -15,7 +15,7 @@ Status: agreed functional specification
 - Supported options: `--dry-run`, `--no-delete`, `--help`, `--version`.
 - Preserve the simple `rsync -av` output by default; no extra `--verbose` or automatic `set -x`.
 
-Runtime errors emitted by `codex-sync` are red and deletion warnings yellow only when stderr is a terminal and `NO_COLOR` is unset. Setting `NO_COLOR` to any value, including an empty value, disables color. Reset color after each diagnostic; add no color codes to redirected diagnostics. Existing human-facing messages gain semantic emoji prefixes: ❌ errors, ⚠️ warnings/prompts, ℹ️ transfer status, and ✅ installation/removal success. Preserve wording, streams, exit status, version output, and SSH/rsync output. Help also describes marker-defined root resolution.
+Runtime errors emitted by `codex-sync` are red and deletion warnings yellow only when stderr is a terminal and `NO_COLOR` is unset. Setting `NO_COLOR` to any value, including an empty value, disables color. Reset color after each diagnostic; add no color codes to redirected diagnostics. Existing human-facing messages gain semantic emoji prefixes: ❌ errors, ⚠️ warnings/prompts, ℹ️ transfer status, and ✅ installation/removal success. Preserve wording, streams, exit status, version output, and SSH/rsync output. Help also describes marker-defined root resolution and assisted missing-marker creation.
 
 ## Local project resolution
 
@@ -48,7 +48,7 @@ Before either push or pull, verify:
 - the nearest local `.codexignore` exists as a readable regular file before any SSH or rsync operation (an empty file is valid);
 - the remote `~/<project-name>` directory exists via SSH.
 
-If either is absent, stop with a clear error. Never create remote directories implicitly. Do not synchronize the filesystem root or the user's home directory as a project. Quote paths safely for both local commands and remote SSH/rsync contexts.
+If either is absent, stop without transferring; a missing local marker can use the assisted creation flow below. Never create remote directories implicitly. Do not synchronize the filesystem root or the user's home directory as a project. Quote paths safely for both local commands and remote SSH/rsync contexts.
 
 ## Exclusions
 
@@ -57,7 +57,7 @@ Combine these sources in both directions (the directive below can disable only t
 2. Optional global `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync/ignore`.
 3. Required nearest local `.codexignore`, found from the physical invocation directory upward; its directory defines the local project.
 
-For both push and pull, search the physical **local** invocation directory first, then each physical parent through filesystem root, stopping at the first `.codexignore` entry (including dangling symlinks). This begins at the physical current working directory. Never search remote paths. Only the nearest file is used; parent files are not combined. An invalid nearest entry fails validation rather than falling back. There is no explicit ignore-path override. Patterns retain rsync semantics relative to the marker-defined transfer root. Preserve the existing filename `.codexignore`. Fail clearly with a helpful message if the local `.codexignore` is missing, unreadable, or not a regular file. The global ignore file remains optional and does not replace `.codexignore`. Use rsync-compatible patterns rather than defining a new ignore syntax. Exclude the project ignore file itself from transfers. Do not use `--delete-excluded`; excluded destination files should remain protected under ordinary rsync deletion semantics.
+For both push and pull, search the physical **local** invocation directory first, then each physical parent through filesystem root, stopping at the first `.codexignore` entry (including dangling symlinks). This begins at the physical current working directory. Never search remote paths. Only the nearest file is used; parent files are not combined. An invalid nearest entry fails validation rather than falling back. There is no explicit ignore-path override. Patterns retain rsync semantics relative to the marker-defined transfer root. Preserve the existing filename `.codexignore`. If the local `.codexignore` is missing, use the assisted creation flow below for push/pull; unreadable or non-regular entries fail clearly without offering creation. The global ignore file remains optional and does not replace `.codexignore`. Use rsync-compatible patterns rather than defining a new ignore syntax. Exclude the project ignore file itself from transfers. Do not use `--delete-excluded`; excluded destination files should remain protected under ordinary rsync deletion semantics.
 
 The user is responsible for checking that no sensitive files or directories are transferred to the remote host. Document that credentials, private keys, environment files, and other secrets are not automatically excluded; recommend configuring `ignore` or `.codexignore` and previewing with `cpush --dry-run`. Exclusions and dry runs do not guarantee that secrets cannot be transferred.
 
@@ -66,6 +66,12 @@ Reject the rsync list-clearing `!` rule in either ignore file before any SSH or 
 The selected local `.codexignore` may contain the metadata directive `# codex-sync: no-global-ignore`. For recognition, remove one terminal carriage return (supporting CRLF as well as LF), then trim only leading and trailing ASCII spaces and tabs. The remaining line must match that literal exactly, case-sensitively, with no additional text or changes to internal whitespace. A final line without a newline is supported. Repeated matching directives are idempotent. Other lines retain ordinary rsync semantics.
 
 If any line matches, skip the global ignore file entirely, including existence/readability and list-clearing validation, for both push and pull. Remove matching metadata lines from the project patterns supplied to rsync; keep every other project rule active, including rejection of the list-clearing `!` rule. Built-in exclusions remain unchanged and mandatory. Directives in the global file or an unselected ancestor marker have no special meaning. Root lookup and both-side validation remain unchanged.
+
+## Assisted missing-marker creation
+
+Only push/pull (including dry runs) offer assistance when the entire physical cwd-to-root search finds no `.codexignore` entry. Invalid existing entries retain validation errors without prompting. Before any host configuration, SSH or rsync operation, suggest the physical Git worktree root from optional `git -C <physical-cwd> rev-parse --show-toplevel`, if it resolves to an existing physical ancestor; otherwise suggest physical cwd. Git failure or absence is harmless. Git never changes marker lookup or transfer root semantics.
+
+Warn about reviewing sensitive files and exclusions; an empty marker does not protect secrets. Require both stdin and stderr to be terminals before prompting; otherwise fail nonzero without creation. Reject unsafe root/home locations and invalid suggested root names. Prompt explicitly with default No `[y/N]`; accept only `y`, `Y`, `yes`, `YES`, or `Yes`. Empty input, EOF and all other answers decline. On affirmation, exclusively create an empty `.codexignore` without overwriting any existing entry, including dangling symlinks or entries introduced after lookup. Creation failure is an error. Never create directories. Always stop nonzero without SSH or rsync, including after successful creation, and tell the user to review exclusions and rerun. Inspect remains read-only and fails normally for missing markers.
 
 ## Local inspection
 
@@ -126,6 +132,7 @@ Use Bash tests with mocked SSH and rsync; no live remote required. Check:
 - stale or invalid `project-folders` files have no effect;
 - invalid project names and missing project errors;
 - default and configured SSH target;
+- assisted missing-marker creation: affirmative/negative/default responses, noninteractive affirmative input, optional mocked Git worktree hint and failure/unavailable fallback, exclusive regular-file and symlink protection, dry-run stop behavior, unchanged inspect errors, and no SSH/rsync; interactive tests require util-linux `script`;
 - required local ignore validation in both directions, including missing and empty files and no SSH or rsync on failure;
 - nearest ignore lookup: local, inherited, nearest-wins, no file, physical parents, nested invocation transferring the marker directory in both directions, flat remote basename naming, nested markers, validation of marker roots rather than invocation names, unsafe home roots, invalid entries and inherited list-clearing rules;
 - optional global ignores, cumulative ignores, and built-in exclusions;

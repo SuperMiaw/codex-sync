@@ -14,7 +14,42 @@ fail() {
 	exit 1
 }
 usage() {
-	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync inspect' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.' 'In that file, # codex-sync: no-global-ignore disables global ignore rules.' 'inspect shows the sync root, source status and effective exclusion rules without SSH or rsync.'
+	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync inspect' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.' 'Missing marker: interactive push/pull offers empty-file creation [y/N], then stops.' 'Git worktree root is an optional location hint; otherwise physical cwd is suggested.' 'Review sensitive files/exclusions and rerun; noninteractive commands never create it.' 'In that file, # codex-sync: no-global-ignore disables global ignore rules.' 'inspect shows the sync root, source status and effective exclusion rules without SSH or rsync.'
+}
+assist_missing_ignore() {
+	local suggested=$local_dir git_root='' answer='' physical_root
+	# Git is only a hint for creation, never a synchronization-root resolver.
+	if command -v git >/dev/null && git_root=$(git -C "$local_dir" rev-parse --show-toplevel 2>/dev/null); then
+		if physical_root=$(cd -- "$git_root" 2>/dev/null && pwd -P); then
+			case $local_dir/ in
+			"${physical_root%/}/"*) suggested=$physical_root ;;
+			esac
+		fi
+	fi
+	local marker=${suggested%/}/.codexignore
+	diagnostic 33 "⚠️ No .codexignore found (searched local project and parents). Suggested location: $marker"
+	diagnostic 33 '⚠️ Review sensitive files and exclusions before syncing; an empty file does not protect secrets.'
+	[[ -t 0 && -t 2 ]] || fail 'Noninteractive context: create and review .codexignore manually, then rerun.'
+	local physical_home
+	physical_home=$(cd -- "$HOME" && pwd -P) || fail 'Cannot resolve home directory'
+	[[ $suggested != / && $suggested != "$physical_home" ]] || fail 'Refusing to synchronize filesystem root or home directory'
+	valid_name "${suggested##*/}" || fail "Invalid project name: ${suggested##*/}"
+	printf '⚠️ Create empty .codexignore at %s? [y/N] ' "$marker" >&2
+	if ! IFS= read -r answer; then answer=''; fi
+	case $answer in
+	y | Y | yes | YES | Yes)
+		# Atomic exclusive creation: refuse existing files, directories and symlinks.
+		if ! (
+			set -o noclobber
+			: >"$marker"
+		) 2>/dev/null; then
+			fail "Cannot create .codexignore without overwriting an existing entry: $marker"
+		fi
+		diagnostic 33 "⚠️ Created empty $marker. Review sensitive files and exclusions, then rerun. No synchronization performed."
+		;;
+	*) diagnostic 33 '⚠️ Creation declined. Create and review .codexignore, then rerun. No synchronization performed.' ;;
+	esac
+	exit 1
 }
 no_global_directive() {
 	local line=${1%$'\r'}
@@ -127,6 +162,7 @@ while :; do
 	ignore_dir=${ignore_dir%/*}
 	[[ -n $ignore_dir ]] || ignore_dir=/
 done
+if [[ -z $project_ignore && $command != inspect ]]; then assist_missing_ignore; fi
 [[ -n $project_ignore && -f $project_ignore && -r $project_ignore ]] || fail "Required local project ignore file is missing or not a readable regular file: ${project_ignore:-$local_dir/.codexignore} (searched local project and parents; create it; an empty file is valid)"
 local_dir=$ignore_dir
 project=${local_dir##*/}

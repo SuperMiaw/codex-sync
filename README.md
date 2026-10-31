@@ -53,6 +53,8 @@ Both wrappers accept `--dry-run` and `--no-delete`, which can be combined. Equiv
 
 Every local project needs a readable `.codexignore` file in its directory or a parent, even for pulls. An empty file is valid. The search walks upward through physical parent directories. The entire directory containing the nearest `.codexignore` is transferred, even when you invoke the command from a subdirectory. Only the nearest file is used; an invalid nearest file prevents synchronization.
 
+When no `.codexignore` is found, interactive push/pull offers to create an empty file with default No (`[y/N]`). The suggested location is the nearest Git worktree root when available, otherwise the physical current directory. Git is optional and only supplies this hint. After creation, the command stops: review sensitive files and add exclusions, then rerun. Noninteractive commands never create the file; create and review it manually. `inspect` never offers creation.
+
 For example, create `.codexignore` in your project with:
 
 ```text

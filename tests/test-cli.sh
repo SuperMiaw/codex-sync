@@ -9,7 +9,7 @@ has --dry-run
 mapfile -t args <"$LOG.rsync"
 [[ ${args[-2]} == 'codex:~/demo/' ]]
 "$repo/bin/codex-sync" --help >"$tmp/out"
-[[ $(cat "$tmp/out") == $'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]\n       codex-sync inspect\n       codex-sync --help | --version\n\nSync root: directory containing the nearest .codexignore in physical cwd or parents.\nIn that file, # codex-sync: no-global-ignore disables global ignore rules.\ninspect shows the sync root, source status and effective exclusion rules without SSH or rsync.' ]]
+[[ $(cat "$tmp/out") == $'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]\n       codex-sync inspect\n       codex-sync --help | --version\n\nSync root: directory containing the nearest .codexignore in physical cwd or parents.\nMissing marker: interactive push/pull offers empty-file creation [y/N], then stops.\nGit worktree root is an optional location hint; otherwise physical cwd is suggested.\nReview sensitive files/exclusions and rerun; noninteractive commands never create it.\nIn that file, # codex-sync: no-global-ignore disables global ignore rules.\ninspect shows the sync root, source status and effective exclusion rules without SSH or rsync.' ]]
 "$repo/bin/codex-sync" --version >"$tmp/out"
 [[ $(cat "$tmp/out") == 'codex-sync 0.1.0' ]]
 ok 'wrappers forward options, help and version work'
