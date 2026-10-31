@@ -27,22 +27,21 @@ Optional configuration files live in `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sy
 | File | Purpose | Example contents |
 |---|---|---|
 | `target-host` | SSH host name or alias; defaults to `codex` | `my-sandbox` |
-| `project-folders` | Additional local search directories, one per line | `~/projects` |
 | `ignore` | Global rsync exclusion patterns, one per line | `*.log` |
 
-Create the configuration directory before adding files. In `project-folders`, use existing absolute paths or the `~/` shortcut; spaces within paths are supported. Blank lines and lines starting with `#` are ignored.
+Create the configuration directory before adding files.
 
 ## Usage
 
-Both local and remote project directories must already exist. With no project argument, the current directory is the project and its basename is the remote project name. With a name, lookup checks `./<name>` first, then `project-folders` in order. The remote directory is always `~/<name>` on the configured host.
+Both local and remote project directories must already exist. Run from the local directory you want to synchronize; its basename is the remote project name. The remote directory is always `~/<name>` on the configured host. Project-name arguments and global folder discovery are not supported.
 
-Use a project name, not a path. Names may contain ASCII letters, digits, underscores, hyphens, and internal dots. Synchronizing the filesystem root or your home directory is prohibited.
+The current directory's name may contain ASCII letters, digits, underscores, hyphens, and internal dots. Synchronizing the filesystem root or your home directory is prohibited.
 
 ```bash
 cpush                        # Push the current project
-cpull my-project             # Pull a named project
+cpull                        # Pull the current project
 cpush --dry-run              # Preview changes, including planned deletions
-cpull --no-delete my-project  # Pull while preserving destination-only files
+cpull --no-delete            # Pull while preserving destination-only files
 ```
 
 Both wrappers accept `--dry-run` and `--no-delete`, which can be combined. Equivalent commands are `codex-sync push` and `codex-sync pull`; use `codex-sync --help` for help.
@@ -51,7 +50,7 @@ Both wrappers accept `--dry-run` and `--no-delete`, which can be combined. Equiv
 
 ## .codexignore and secrets
 
-Every local project needs a readable `.codexignore` file in its directory or a parent, even for pulls. An empty file is valid. Only the nearest file is used; an invalid nearest file prevents synchronization.
+Every local project needs a readable `.codexignore` file in its directory or a parent, even for pulls. An empty file is valid. The search walks upward through physical parent directories, without changing the directory being transferred. Only the nearest file is used; an invalid nearest file prevents synchronization.
 
 For example, create `.codexignore` in your project with:
 

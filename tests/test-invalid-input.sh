@@ -9,22 +9,24 @@ for name in '' . .. ../demo /demo 'bad name' 'x;touch' '.hidden' 'trailing.'; do
 done
 mkdir -p "$tmp/work/a-b_c.2"
 touch "$tmp/work/a-b_c.2/.codexignore"
-cd "$tmp/work"
-run push a-b_c.2
+cd "$tmp/work/a-b_c.2"
+run push
+has 'codex:~/a-b_c.2/'
 reject push absent
-reject push demo extra
+reject push extra
 reject push --unknown
-ok 'valid internal dots and invalid names, missing project, bad arguments'
-printf 'relative/path\n' >"$XDG_CONFIG_HOME/codex-sync/project-folders"
-reject push demo
-[[ ! -e $LOG.ssh ]]
-printf '/nonexistent-codex-sync-test-root\n' >"$XDG_CONFIG_HOME/codex-sync/project-folders"
-reject push demo
-rm "$XDG_CONFIG_HOME/codex-sync/project-folders"
+ok 'valid inferred internal dots and rejected positional arguments and unknown options'
+for name in 'bad name' 'x;touch' '.hidden' 'trailing.'; do
+	mkdir "$tmp/work/$name"
+	cd "$tmp/work/$name"
+	reject push
+	[[ ! -e $LOG.ssh ]]
+done
+cd "$tmp/work/a-b_c.2"
 for host in '-oProxyCommand=x' 'host name' 'host;echo' ''; do
 	printf '%s\n' "$host" >"$XDG_CONFIG_HOME/codex-sync/target-host"
-	reject push demo
+	reject push
 	[[ ! -e $LOG.ssh ]]
 done
 rm "$XDG_CONFIG_HOME/codex-sync/target-host"
-ok 'invalid configured roots and SSH destinations rejected before SSH'
+ok 'unsafe inferred names and SSH destinations rejected before SSH'

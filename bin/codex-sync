@@ -14,7 +14,7 @@ fail() {
 	exit 1
 }
 usage() {
-	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete] [project]' '       codex-sync --help | --version'
+	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync --help | --version'
 }
 valid_name() { [[ $1 =~ ^[a-zA-Z0-9_-]([a-zA-Z0-9_.-]*[a-zA-Z0-9_-])?$ ]]; }
 optional_file() {
@@ -42,8 +42,6 @@ push | pull)
 	;;
 *) fail "Expected push or pull (see --help)" ;;
 esac
-project=''
-has_project=false
 dry_run=false
 delete=true
 for arg in "$@"; do
@@ -59,11 +57,7 @@ for arg in "$@"; do
 	--dry-run) dry_run=true ;;
 	--no-delete) delete=false ;;
 	--*) fail "Unknown option: $arg" ;;
-	*)
-		$has_project && fail 'Only one project name is allowed'
-		project=$arg
-		has_project=true
-		;;
+	*) fail "Unexpected argument: $arg (run from the project directory)" ;;
 	esac
 done
 config=${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync
@@ -71,34 +65,8 @@ host=codex
 optional_file "$config/target-host"
 if [[ -f $config/target-host ]]; then host=$(cat -- "$config/target-host"); fi
 [[ $host =~ ^([a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || fail 'Invalid target-host: expected one SSH host name or alias'
-roots=()
-optional_file "$config/project-folders"
-if [[ -f $config/project-folders ]]; then
-	while IFS= read -r root || [[ -n $root ]]; do
-		[[ -z $root || $root == \#* ]] && continue
-		if [[ $root == \~/* ]]; then root=$HOME/${root:2}; fi
-		[[ $root == /* ]] || fail "Project search root must be absolute: $root"
-		[[ -d $root ]] || fail "Project search root does not exist: $root"
-		roots+=("$root")
-	done <"$config/project-folders"
-fi
-if $has_project; then
-	valid_name "$project" || fail "Invalid project name: $project"
-	local_dir=''
-	if [[ -d ./$project ]]; then local_dir=./$project; else
-		for root in "${roots[@]}"; do
-			if [[ -d $root/$project ]]; then
-				local_dir=$root/$project
-				break
-			fi
-		done
-	fi
-	[[ -n $local_dir ]] || fail "Missing local project: $project"
-else
-	local_dir=.
-fi
-local_dir=$(cd -- "$local_dir" && pwd -P) || fail 'Cannot resolve local project'
-if ! $has_project; then project=${local_dir##*/}; fi
+local_dir=$(pwd -P) || fail 'Cannot resolve local project'
+project=${local_dir##*/}
 valid_name "$project" || fail "Invalid project name: $project"
 home_dir=$(cd -- "$HOME" && pwd -P) || fail 'Cannot resolve home directory'
 [[ $local_dir != / && $local_dir != "$home_dir" ]] || fail 'Refusing to synchronize filesystem root or home directory'

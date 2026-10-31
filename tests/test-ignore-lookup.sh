@@ -17,6 +17,8 @@ rm .codexignore
 for direction in push pull; do
 	run "$direction"
 	has "--exclude-from=$tmp/parent space/near/.codexignore"
+	has "$tmp/parent space/near/demo/"
+	has 'codex:~/demo/'
 	if has "--exclude-from=$tmp/parent space/.codexignore"; then exit 1; fi
 done
 ok 'nearest inherited ignore wins, preserving spaces'
@@ -24,16 +26,13 @@ rm "$tmp/parent space/near/.codexignore"
 run push
 has "--exclude-from=$tmp/parent space/.codexignore"
 ok 'walks multiple local parent directories'
-# Named lookup must use the selected project, not the launch directory.
-printf '%s\n' "$tmp/parent space/near" >"$XDG_CONFIG_HOME/codex-sync/project-folders"
-printf '!\n' >"$tmp/launch/.codexignore"
-cd "$tmp/launch"
-run pull demo
-has "--exclude-from=$tmp/parent space/.codexignore"
 ln -s "$tmp/parent space/near/demo" "$tmp/launch/linked"
-run push linked
+cd "$tmp/launch/linked"
+run push
 has "--exclude-from=$tmp/parent space/.codexignore"
-ok 'named and symlinked projects search physical project parents, not cwd'
+has "$tmp/parent space/near/demo/"
+has 'codex:~/demo/'
+ok 'symlinked cwd searches physical parents and preserves the cwd transfer root'
 cd "$tmp/parent space/near/demo"
 for direction in push pull; do
 	mkdir .codexignore

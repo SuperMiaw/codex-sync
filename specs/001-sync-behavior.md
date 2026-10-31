@@ -8,8 +8,8 @@ Status: agreed functional specification
 
 ## Commands
 
-- `codex-sync push [options] [project]`: local to remote.
-- `codex-sync pull [options] [project]`: remote to local.
+- `codex-sync push [options]`: local to remote.
+- `codex-sync pull [options]`: remote to local.
 - `cpush` and `cpull`: executable wrappers forwarding all arguments to `codex-sync push` and `codex-sync pull`, respectively.
 - Supported options: `--dry-run`, `--no-delete`, `--help`, `--version`.
 - Preserve the simple `rsync -av` output by default; no extra `--verbose` or automatic `set -x`.
@@ -18,14 +18,9 @@ Runtime errors emitted by `codex-sync` are red and deletion warnings yellow only
 
 ## Local project resolution
 
-Without a project argument, use the current working directory itself as the project, regardless of whether it is a Git repository. Its basename is the remote project name. Do not walk upward to a Git root.
+Use the physical current working directory itself as the project, regardless of whether it is a Git repository. Its basename is the remote project name. Parent traversal finds only the nearest `.codexignore`; it does not change the transfer root or inspect Git metadata.
 
-With a project-name argument:
-1. Check for a directory named `./<project>` relative to the current working directory.
-2. If not found, search `<root>/<project>` for each root listed in the configured `project-folders` file, in file order.
-3. Use the first matching directory; fail clearly if none exists.
-
-An explicit argument is a project **name**, not a path. Accept ASCII letters, digits, underscores, hyphens, and internal dots; reject `.`, `..`, path separators, and unsafe or empty names. Apply the same validation to the inferred basename. Do not require `.git`; require the local `.codexignore` as described below.
+Project-name and path arguments are rejected before SSH or rsync. There is no child-directory lookup or global folder discovery. Accept ASCII letters, digits, underscores, hyphens, and internal dots in the inferred basename; reject `.`, `..`, path separators, and unsafe or empty names. Do not require `.git`; require the local `.codexignore` as described below.
 
 The project directory must already exist locally. Do not create it.
 
@@ -33,9 +28,7 @@ The project directory must already exist locally. Do not create it.
 
 All user-level config files live under `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync/`.
 
-### `project-folders`
-
-An optional text file listing additional local search roots, one per line. Preserve order and spaces within paths. Ignore blank lines and lines beginning with `#`. Paths must be absolute and refer to existing directories; allow `~/` as a shortcut for the user's home directory. Validate all configured roots before project lookup, even when using the current directory or a matching local child. Reject or report invalid entries rather than interpreting relative paths against the current working directory. Missing file means no additional search roots.
+The former `project-folders` file is unused: it is neither read nor validated.
 
 ### `target-host`
 
@@ -63,7 +56,7 @@ Combine these three sources in both directions:
 2. Optional global `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync/ignore`.
 3. Required nearest local `.codexignore`, found from the resolved local project upward.
 
-For both push and pull, search the resolved **local** project directory first, then each physical parent through filesystem root, stopping at the first `.codexignore` entry (including dangling symlinks). With no project argument this begins at cwd; with a name it begins at the selected local project, not the launch directory. Never search remote paths. Only the nearest file is used; parent files are not combined. An invalid nearest entry fails validation rather than falling back. There is no explicit ignore-path override. Inherited patterns retain rsync semantics relative to the transfer root. Preserve the existing filename `.codexignore`. Fail clearly with a helpful message if the local `.codexignore` is missing, unreadable, or not a regular file. The global ignore file remains optional and does not replace `.codexignore`. Use rsync-compatible patterns rather than defining a new ignore syntax. Exclude the project ignore file itself from transfers. Do not use `--delete-excluded`; excluded destination files should remain protected under ordinary rsync deletion semantics.
+For both push and pull, search the resolved **local** project directory first, then each physical parent through filesystem root, stopping at the first `.codexignore` entry (including dangling symlinks). This begins at the physical current working directory. Never search remote paths. Only the nearest file is used; parent files are not combined. An invalid nearest entry fails validation rather than falling back. There is no explicit ignore-path override. Inherited patterns retain rsync semantics relative to the transfer root. Preserve the existing filename `.codexignore`. Fail clearly with a helpful message if the local `.codexignore` is missing, unreadable, or not a regular file. The global ignore file remains optional and does not replace `.codexignore`. Use rsync-compatible patterns rather than defining a new ignore syntax. Exclude the project ignore file itself from transfers. Do not use `--delete-excluded`; excluded destination files should remain protected under ordinary rsync deletion semantics.
 
 The user is responsible for checking that no sensitive files or directories are transferred to the remote host. Document that credentials, private keys, environment files, and other secrets are not automatically excluded; recommend configuring `ignore` or `.codexignore` and previewing with `cpush --dry-run`. Exclusions and dry runs do not guarantee that secrets cannot be transferred.
 
@@ -100,11 +93,12 @@ Installation is by **copy**, not symlink. Document how to ensure `~/.local/bin` 
 
 Use Bash tests with mocked SSH and rsync; no live remote required. Check:
 - no-argument current-directory resolution without Git;
-- named lookup in `./` before ordered configured roots;
+- rejection of project-name/path arguments and absence of child/global folder lookup;
+- stale or invalid `project-folders` files have no effect;
 - invalid project names and missing project errors;
 - default and configured SSH target;
 - required local ignore validation in both directions, including missing and empty files and no SSH or rsync on failure;
-- nearest ignore lookup: local, inherited, nearest-wins, no file, physical parents, named selection independent of cwd, invalid entries and inherited list-clearing rules;
+- nearest ignore lookup: local, inherited, nearest-wins, no file, physical parents, unchanged cwd transfer root, invalid entries and inherited list-clearing rules;
 - optional global ignores, cumulative ignores, and built-in exclusions;
 - rejection of list-clearing ignore rules;
 - emoji message prefixes, unchanged help/version contracts, terminal diagnostic colors, redirected diagnostics, `NO_COLOR` including empty values, and unchanged SSH/rsync output (terminal checks require util-linux `script` and are skipped if unavailable);
