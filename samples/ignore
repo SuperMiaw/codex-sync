@@ -1,0 +1,13 @@
+# Common sensitive files
+# This list is not exhaustive. Review before use.
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+.venv/
+
+# Node.js
+node_modules/

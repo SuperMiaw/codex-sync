@@ -31,6 +31,8 @@ Optional configuration files live in `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sy
 
 Create the configuration directory before adding files.
 
+[samples/ignore](samples/ignore) is an optional example global ignore file, provided as inspiration only. It is not exhaustive; review patterns for your own files before use. Samples are never installed, copied, or automatically activated by codex-sync.
+
 ## Usage
 
 The local project directory must already exist. If the remote destination is missing, interactive push explicitly offers to create it over SSH with default No (`[y/N]`), then continues only after successful creation and validation. Declining, noninteractive use, or SSH failure stops the push. Pull never creates remote directories; `--dry-run` reports a missing remote directory and stops without creating it. Run from the local project directory or any subdirectory. The nearest `.codexignore` found in the physical current directory or its parents marks the synchronization root; that directory’s basename is the remote project name. The remote directory is always `~/<name>` on the configured host. Project-name arguments and global folder discovery are not supported.
@@ -55,16 +57,7 @@ Every local project needs a readable `.codexignore` file in its directory or a p
 
 When no `.codexignore` is found, interactive push/pull offers to create an empty file with default No (`[y/N]`). The suggested location is the nearest Git worktree root when available, otherwise the physical current directory. Git is optional and only supplies this hint. After creation, the command stops: review sensitive files and add exclusions, then rerun. Noninteractive commands never create the file; create and review it manually. `inspect` never offers creation.
 
-For example, create `.codexignore` in your project with:
-
-```text
-.env
-.env.*
-*.pem
-*.key
-node_modules/
-build/
-```
+See [samples/codexignore](samples/codexignore) for a minimal project-specific example, provided as inspiration only. Its `/local-notes.txt` pattern excludes that file at the synchronization root. The sample is not exhaustive; review your project and choose appropriate patterns before use.
 
 Patterns use rsync exclusion syntax relative to the synchronization root. They apply in both directions and combine with the optional global `ignore` file. The list-clearing `!` rule is not allowed.
 
