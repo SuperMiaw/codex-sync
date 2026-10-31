@@ -18,7 +18,7 @@ Installs `codex-sync`, `cpush`, and `cpull` into `~/.local/bin` without sudo or 
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Replacing different existing commands requires confirmation; use `./install.sh --force` for noninteractive replacement.
+Identical installed commands are left untouched. Updating existing codex-sync scripts prompts for confirmation (`[y/N]`); unrelated files and symlinks get a collision warning and a separate replacement confirmation. All confirmations happen before installation changes. Use `./install.sh --force` for explicit noninteractive updates or replacements. Configuration files are not managed by the installer.
 
 ## Configuration
 

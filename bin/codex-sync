@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
+# codex-sync
 set -euo pipefail
+
+readonly VERSION=0.1.0
 
 diagnostic() {
 	local color=$1 message=$2
@@ -114,7 +117,7 @@ case $1 in
 	exit 0
 	;;
 --version)
-	printf 'codex-sync 0.1.0\n'
+	printf 'codex-sync %s\n' "$VERSION"
 	exit 0
 	;;
 push | pull | inspect)
@@ -132,7 +135,7 @@ for arg in "$@"; do
 		exit 0
 		;;
 	--version)
-		printf 'codex-sync 0.1.0\n'
+		printf 'codex-sync %s\n' "$VERSION"
 		exit 0
 		;;
 	--dry-run)

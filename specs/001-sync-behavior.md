@@ -12,6 +12,7 @@ Status: agreed functional specification
 - `codex-sync pull [options]`: remote to local.
 - `codex-sync inspect`: read-only local inspection; accepts `--help` and `--version`, rejects transfer options and positional arguments. The former `ignore` subcommand is rejected; there is no alias.
 - `cpush` and `cpull`: executable wrappers forwarding all arguments to `codex-sync push` and `codex-sync pull`, respectively.
+- `--version` prints `codex-sync` followed by the manually maintained `VERSION` constant (currently `0.1.0`); routine edits do not change it.
 - Supported options: `--dry-run`, `--no-delete`, `--help`, `--version`.
 - Preserve the simple `rsync -av` output by default; no extra `--verbose` or automatic `set -x`.
 
@@ -123,10 +124,13 @@ The README must prominently warn that both push and pull can delete files at the
 
 Preflight **all three** target paths before making changes:
 - If absent, install.
-- If identical to the source, proceed without confirmation.
-- If different, list all collisions and ask once for confirmation, defaulting to No.
-- In noninteractive mode, refuse collisions unless an explicit `--force` flag is supplied to the installer.
-- Avoid partial updates where practical; do not overwrite unrelated files silently.
+- Use `cmp -s` for existing regular files; identical executables are not rewritten. Identical files lacking executable permission receive mode 755 without rewriting their contents.
+- A differing regular file is a managed script only when its first two lines are exactly `#!/usr/bin/env bash` and `# codex-sync`. All three installable scripts carry this marker immediately after the shebang. This marker is an identification convention, not proof of authenticity.
+- List managed updates and unrelated collisions separately. Ask once per nonempty group: update managed scripts, then explicitly replace unrelated files or symlinks, each defaulting to No `[y/N]`. Accept only `y`, `Y`, `yes`, `YES`, or `Yes`; EOF and other answers decline.
+- Require terminal stdin and stderr for confirmations; otherwise fail without changes unless `--force` explicitly overrides both confirmations.
+- Symlinks (including dangling links and links to directories) are always collisions, never managed or identical; replacement replaces the link, not its referent. Other non-regular entries and directories fail even with `--force`.
+- Complete all preflight checks and confirmations before modifying any target. Stage all changed commands with mode 755 before moving them into place; unchanged executables retain their permissions and identity. The final three-file replacement is not atomic as a group.
+- Never manage user configuration files.
 
 `uninstall.sh` removes installed commands carefully. It must not silently remove unrelated or modified executables. Preserve `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync/` and user project ignore files.
 
@@ -151,6 +155,6 @@ Use Bash tests with mocked SSH and rsync; no live remote required. Check:
 - direction, source/destination trailing slash handling, and both-side existence checks;
 - assisted remote push creation with mocked SSH/rsync: existing and absent entries, affirmative/default/negative/EOF answers, noninteractive refusal, dry-run and pull refusal, SSH/check/mkdir/revalidation failures, flat paths, shell-safe remote HOME quoting, and no transfer before successful creation and revalidation; terminal cases require util-linux `script`;
 - default `--delete`, `--no-delete`, and `--dry-run`, with the exact deletion warning only for real deleting syncs in both directions;
-- installation collisions, force handling, and safe uninstall.
+- installation copies and header markers, unchanged-file identity, managed updates, unrelated/header near-match collisions, symlinks, mixed-set preflight and default/negative/EOF confirmation, noninteractive and force handling, staged failures, executable permissions, and safe uninstall; terminal installer cases require util-linux `script`.
 
 Run `bash -n`, shfmt, ShellCheck, and the test suite. Do not run real synchronization against user data without permission.

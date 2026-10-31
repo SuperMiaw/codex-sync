@@ -16,6 +16,8 @@ Use `bin/codex-sync` as the Bash implementation, with lightweight executable `bi
 
 Target Debian/Linux, Bash, rsync, and OpenSSH. Use `#!/usr/bin/env bash`, `set -euo pipefail`, careful quoting, and explicit error handling. Format with shfmt, lint with ShellCheck, and check with `bash -n`. Do not depend on Fish; wrappers must work from any shell that can execute them.
 
+The `VERSION` constant near the top of `bin/codex-sync` is manually updated only for explicit releases, never for routine edits.
+
 Keep configuration under `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync/`. Never place real credentials or personal host information in tracked files.
 
 ## Safety and implementation
