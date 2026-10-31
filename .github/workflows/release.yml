@@ -92,6 +92,5 @@ jobs:
       - name: Publish installer
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ github.ref_name }}
+          draft: true
           files: dist/codex-sync-${{ github.ref_name }}.run
-          fail_on_unmatched_files: true
