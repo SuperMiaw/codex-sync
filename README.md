@@ -33,7 +33,7 @@ Create the configuration directory before adding files.
 
 ## Usage
 
-Both local and remote project directories must already exist. Run from the local project directory or any subdirectory. The nearest `.codexignore` found in the physical current directory or its parents marks the synchronization root; that directory’s basename is the remote project name. The remote directory is always `~/<name>` on the configured host. Project-name arguments and global folder discovery are not supported.
+The local project directory must already exist. If the remote destination is missing, interactive push explicitly offers to create it over SSH with default No (`[y/N]`), then continues only after successful creation and validation. Declining, noninteractive use, or SSH failure stops the push. Pull never creates remote directories; `--dry-run` reports a missing remote directory and stops without creating it. Run from the local project directory or any subdirectory. The nearest `.codexignore` found in the physical current directory or its parents marks the synchronization root; that directory’s basename is the remote project name. The remote directory is always `~/<name>` on the configured host. Project-name arguments and global folder discovery are not supported.
 
 The synchronization root's name may contain ASCII letters, digits, underscores, hyphens, and internal dots. Synchronizing the filesystem root or your home directory is prohibited.
 

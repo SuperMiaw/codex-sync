@@ -4,7 +4,7 @@ Status: agreed functional specification
 
 ## Goal
 
-`codex-sync` synchronizes an existing local project directory with the matching existing directory on an SSH-accessible sandbox host, using rsync. Git is optional and used only as a missing-marker creation hint; the tool does not create, provision, or deploy project directories.
+`codex-sync` synchronizes an existing local project directory with the matching existing directory on an SSH-accessible sandbox host, using rsync. Git is optional and used only as a missing-marker creation hint; the tool can assist with creating a missing remote push destination as specified below; it does not provision workspaces.
 
 ## Commands
 
@@ -48,7 +48,15 @@ Before either push or pull, verify:
 - the nearest local `.codexignore` exists as a readable regular file before any SSH or rsync operation (an empty file is valid);
 - the remote `~/<project-name>` directory exists via SSH.
 
-If either is absent, stop without transferring; a missing local marker can use the assisted creation flow below. Never create remote directories implicitly. Do not synchronize the filesystem root or the user's home directory as a project. Quote paths safely for both local commands and remote SSH/rsync contexts.
+If either is absent, stop without transferring except for the explicit assisted remote push creation below; a missing local marker can use the assisted creation flow below. Never create remote directories implicitly. Do not synchronize the filesystem root or the user's home directory as a project. Quote paths safely for both local commands and remote SSH/rsync contexts.
+
+## Assisted missing remote destination creation
+
+Only a real push may offer creation when SSH confirms that `~/<project-name>` has no entry (including no dangling symlink). The check returns status 3 for absence; other failures, including SSH transport failure, stop without prompting. Existing files, dangling symlinks, and unsafe directory aliases are errors.
+
+Require both stdin and stderr to be terminals. Prompt explicitly with the host and destination and default No `[y/N]`; accept only `y`, `Y`, `yes`, `YES`, or `Yes`. Empty input, EOF and all other responses decline. Decline and noninteractive contexts stop nonzero without mkdir or rsync. On affirmation, use SSH to run a quoted `mkdir -- "$HOME/<project-name>"` without `-p`; creation failure (including a newly appeared entry) stops. Revalidate the directory through SSH after successful creation; only a successful check allows the normal push to proceed. No local directory is created. Host selection, flat remote layout, excludes, and deletion semantics are unchanged.
+
+Pull never offers creation. Dry-run reports a missing remote destination and stops nonzero without prompting or mutating remote state, even on affirmative terminal input. This remote flow does not change the separate missing-local-marker assistance.
 
 ## Exclusions
 
@@ -141,6 +149,7 @@ Use Bash tests with mocked SSH and rsync; no live remote required. Check:
 - rejection of list-clearing ignore rules;
 - emoji message prefixes, help describing marker-defined root resolution, unchanged version output, terminal diagnostic colors, redirected diagnostics, `NO_COLOR` including empty values, and unchanged SSH/rsync output (terminal checks require util-linux `script` and are skipped if unavailable);
 - direction, source/destination trailing slash handling, and both-side existence checks;
+- assisted remote push creation with mocked SSH/rsync: existing and absent entries, affirmative/default/negative/EOF answers, noninteractive refusal, dry-run and pull refusal, SSH/check/mkdir/revalidation failures, flat paths, shell-safe remote HOME quoting, and no transfer before successful creation and revalidation; terminal cases require util-linux `script`;
 - default `--delete`, `--no-delete`, and `--dry-run`, with the exact deletion warning only for real deleting syncs in both directions;
 - installation collisions, force handling, and safe uninstall.
 

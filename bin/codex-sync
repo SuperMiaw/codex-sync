@@ -14,7 +14,7 @@ fail() {
 	exit 1
 }
 usage() {
-	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync inspect' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.' 'Missing marker: interactive push/pull offers empty-file creation [y/N], then stops.' 'Git worktree root is an optional location hint; otherwise physical cwd is suggested.' 'Review sensitive files/exclusions and rerun; noninteractive commands never create it.' 'In that file, # codex-sync: no-global-ignore disables global ignore rules.' 'inspect shows the sync root, source status and effective exclusion rules without SSH or rsync.'
+	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync inspect' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.' 'Missing marker: interactive push/pull offers empty-file creation [y/N], then stops.' 'Git worktree root is an optional location hint; otherwise physical cwd is suggested.' 'Review sensitive files/exclusions and rerun; noninteractive commands never create it.' 'Missing remote destination: interactive push offers mkdir [y/N], then continues on success.' 'Pull never creates remote directories; dry-run reports missing destinations without creation.' 'In that file, # codex-sync: no-global-ignore disables global ignore rules.' 'inspect shows the sync root, source status and effective exclusion rules without SSH or rsync.'
 }
 assist_missing_ignore() {
 	local suggested=$local_dir git_root='' answer='' physical_root
@@ -218,11 +218,33 @@ if [[ -f $config/target-host ]]; then host=$(cat -- "$config/target-host"); fi
 [[ $host =~ ^([a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || fail 'Invalid target-host: expected one SSH host name or alias'
 command -v ssh >/dev/null || fail 'OpenSSH client (ssh) is required'
 command -v rsync >/dev/null || fail 'rsync is required'
-# Project names contain no shell syntax. Reject remote symlinks resolving to / or HOME.
-remote_check="p=\"\$HOME/$project\"; test -d \"\$p\" && r=\$(cd -- \"\$p\" && pwd -P) && h=\$(cd -- \"\$HOME\" && pwd -P) && test \"\$r\" != / && test \"\$r\" != \"\$h\""
-# Only the validated project name expands locally; remote variables remain escaped.
+# Only the validated project name expands locally; remote variables stay escaped.
+# Exit 3 means an absent entry; files, dangling symlinks and unsafe aliases fail.
+remote_check="p=\"\$HOME/$project\"; if test ! -e \"\$p\" && test ! -L \"\$p\"; then exit 3; fi; test -d \"\$p\" && r=\$(cd -- \"\$p\" && pwd -P) && h=\$(cd -- \"\$HOME\" && pwd -P) && test \"\$r\" != / && test \"\$r\" != \"\$h\""
+remote_status=0
 # shellcheck disable=SC2029
-ssh "$host" "$remote_check" || fail "Remote project missing, unsafe, or inaccessible: $host:~/$project"
+ssh "$host" "$remote_check" || remote_status=$?
+if ((remote_status != 0)); then
+	if ((remote_status != 3)); then
+		fail "Remote project unsafe, inaccessible, or SSH check failed: $host:~/$project"
+	fi
+	[[ $command == push ]] || fail "Remote project missing: $host:~/$project (pull never creates directories)"
+	! $dry_run || fail "Remote destination missing: $host:~/$project (dry-run never creates directories)"
+	[[ -t 0 && -t 2 ]] || fail "Remote destination missing: $host:~/$project (noninteractive context; create it manually)"
+	printf '⚠️ Create remote destination directory %s:~/%s? [y/N] ' "$host" "$project" >&2
+	answer=''
+	if ! IFS= read -r answer; then answer=''; fi
+	case $answer in
+	y | Y | yes | YES | Yes) ;;
+	*) fail 'Remote directory creation declined. No synchronization performed.' ;;
+	esac
+	# No -p: fail if any entry appeared after validation; never overwrite it.
+	# shellcheck disable=SC2029
+	ssh "$host" "mkdir -- \"\$HOME/$project\"" || fail "Cannot create remote destination: $host:~/$project"
+	# Recheck directory safety after successful creation before any transfer.
+	# shellcheck disable=SC2029
+	ssh "$host" "$remote_check" || fail "Created remote destination failed validation: $host:~/$project"
+fi
 local_path=$local_dir/
 remote_path="$host:~/$project/"
 if [[ $command == push ]]; then
