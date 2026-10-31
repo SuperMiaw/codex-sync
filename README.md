@@ -65,6 +65,8 @@ build/
 
 Patterns use rsync exclusion syntax relative to the synchronization root. They apply in both directions and combine with the optional global `ignore` file. The list-clearing `!` rule is not allowed.
 
+To disable global ignore rules for this synchronization root in both directions, add `# codex-sync: no-global-ignore` on its own line in the selected `.codexignore`. Surrounding spaces or tabs are allowed. This directive is metadata; ordinary rules in the same file and the built-in exclusions still apply.
+
 Only `.git/`, `.ssh/`, and `.codexignore` are automatically excluded. **Other credentials, private keys, environment files, and secrets are not automatically detected or excluded.** Review your project, add appropriate exclusions, and preview with `cpush --dry-run`. Exclusion rules and dry runs do not guarantee that secrets cannot be transferred.
 
 ## Uninstallation

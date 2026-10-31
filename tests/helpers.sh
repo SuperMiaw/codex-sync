@@ -19,6 +19,9 @@ cat >"$tmp/mock/rsync" <<'MOCK'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$@" > "$LOG.rsync"
+for arg in "$@"; do
+    if [[ $arg == --exclude-from=- ]]; then cat > "$LOG.patterns"; fi
+done
 MOCK
 chmod +x "$tmp/mock/ssh" "$tmp/mock/rsync"
 export PATH=$tmp/mock:$PATH

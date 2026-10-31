@@ -51,7 +51,7 @@ If either is absent, stop with a clear error. Never create remote directories im
 
 ## Exclusions
 
-Combine these three sources in both directions:
+Combine these sources in both directions (the directive below can disable only the global source):
 1. Exactly three non-overridable built-in exclusion patterns: `.git/`, `.ssh/`, and `.codexignore`. No other sensitive files or generated directories are excluded automatically.
 2. Optional global `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync/ignore`.
 3. Required nearest local `.codexignore`, found from the physical invocation directory upward; its directory defines the local project.
@@ -61,6 +61,10 @@ For both push and pull, search the physical **local** invocation directory first
 The user is responsible for checking that no sensitive files or directories are transferred to the remote host. Document that credentials, private keys, environment files, and other secrets are not automatically excluded; recommend configuring `ignore` or `.codexignore` and previewing with `cpush --dry-run`. Exclusions and dry runs do not guarantee that secrets cannot be transferred.
 
 Reject the rsync list-clearing `!` rule in either ignore file before any SSH or rsync operation so user patterns cannot remove the mandatory built-in exclusions.
+
+The selected local `.codexignore` may contain the metadata directive `# codex-sync: no-global-ignore`. For recognition, remove one terminal carriage return (supporting CRLF as well as LF), then trim only leading and trailing ASCII spaces and tabs. The remaining line must match that literal exactly, case-sensitively, with no additional text or changes to internal whitespace. A final line without a newline is supported. Repeated matching directives are idempotent. Other lines retain ordinary rsync semantics.
+
+If any line matches, skip the global ignore file entirely, including existence/readability and list-clearing validation, for both push and pull. Remove matching metadata lines from the project patterns supplied to rsync; keep every other project rule active, including rejection of the list-clearing `!` rule. Built-in exclusions remain unchanged and mandatory. Directives in the global file or an unselected ancestor marker have no special meaning. Root lookup and both-side validation remain unchanged.
 
 ## Deletion and preview
 
@@ -100,6 +104,7 @@ Use Bash tests with mocked SSH and rsync; no live remote required. Check:
 - required local ignore validation in both directions, including missing and empty files and no SSH or rsync on failure;
 - nearest ignore lookup: local, inherited, nearest-wins, no file, physical parents, nested invocation transferring the marker directory in both directions, flat remote basename naming, nested markers, validation of marker roots rather than invocation names, unsafe home roots, invalid entries and inherited list-clearing rules;
 - optional global ignores, cumulative ignores, and built-in exclusions;
+- local no-global-ignore directive in both directions: exact case-sensitive matching, surrounding spaces/tabs, LF/CRLF, duplicate directives, final lines without a newline, metadata removal with ordinary rules retained, skipped invalid global files, retained local list-clearing rejection and built-ins, inherited roots, and no effect from near matches or directives in global/unselected ancestor files;
 - rejection of list-clearing ignore rules;
 - emoji message prefixes, help describing marker-defined root resolution, unchanged version output, terminal diagnostic colors, redirected diagnostics, `NO_COLOR` including empty values, and unchanged SSH/rsync output (terminal checks require util-linux `script` and are skipped if unavailable);
 - direction, source/destination trailing slash handling, and both-side existence checks;

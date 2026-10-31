@@ -14,7 +14,19 @@ fail() {
 	exit 1
 }
 usage() {
-	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.'
+	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.' 'In that file, # codex-sync: no-global-ignore disables global ignore rules.'
+}
+no_global_directive() {
+	local line=${1%$'\r'}
+	line="${line#"${line%%[!$' \t']*}"}"
+	line="${line%"${line##*[!$' \t']}"}"
+	[[ $line == '# codex-sync: no-global-ignore' ]]
+}
+project_patterns() {
+	local pattern
+	while IFS= read -r pattern || [[ -n $pattern ]]; do
+		if ! no_global_directive "$pattern"; then printf '%s\n' "$pattern"; fi
+	done <"$project_ignore"
 }
 valid_name() { [[ $1 =~ ^[a-zA-Z0-9_-]([a-zA-Z0-9_.-]*[a-zA-Z0-9_-])?$ ]]; }
 optional_file() {
@@ -89,14 +101,24 @@ excludes=()
 for pattern in '.git/' '.ssh/' '.codexignore'; do
 	excludes+=("--exclude=$pattern")
 done
-for ignore in "$config/ignore" "$project_ignore"; do
+no_global=false
+while IFS= read -r pattern || [[ -n $pattern ]]; do
+	if no_global_directive "$pattern"; then no_global=true; fi
+done <"$project_ignore"
+ignore_files=("$project_ignore")
+if ! $no_global; then ignore_files=("$config/ignore" "${ignore_files[@]}"); fi
+for ignore in "${ignore_files[@]}"; do
 	optional_file "$ignore"
 	if [[ -f $ignore ]]; then
 		# rsync's list-clearing token would remove the mandatory exclusions.
 		while IFS= read -r pattern || [[ -n $pattern ]]; do
 			[[ $pattern != '!' && $pattern != $'!\r' ]] || fail "Ignore file cannot clear mandatory exclusions: $ignore"
 		done <"$ignore"
-		excludes+=("--exclude-from=$ignore")
+		if $no_global && [[ $ignore == "$project_ignore" ]]; then
+			excludes+=(--exclude-from=-)
+		else
+			excludes+=("--exclude-from=$ignore")
+		fi
 	fi
 done
 command -v ssh >/dev/null || fail 'OpenSSH client (ssh) is required'
@@ -122,4 +144,8 @@ if $delete; then
 fi
 if $dry_run; then options+=(--dry-run); fi
 printf 'ℹ️ %s: %s -> %s\n' "$direction" "$source" "$destination"
-rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
+if $no_global; then
+	project_patterns | rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
+else
+	rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
+fi
