@@ -9,7 +9,7 @@ has --dry-run
 mapfile -t args <"$LOG.rsync"
 [[ ${args[-2]} == 'codex:~/demo/' ]]
 "$repo/bin/codex-sync" --help >"$tmp/out"
-[[ $(cat "$tmp/out") == $'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]\n       codex-sync --help | --version' ]]
+[[ $(cat "$tmp/out") == $'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]\n       codex-sync --help | --version\n\nSync root: directory containing the nearest .codexignore in physical cwd or parents.' ]]
 "$repo/bin/codex-sync" --version >"$tmp/out"
 [[ $(cat "$tmp/out") == 'codex-sync 0.1.0' ]]
 ok 'wrappers forward options, help and version work'

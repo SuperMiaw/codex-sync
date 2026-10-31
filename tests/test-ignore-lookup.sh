@@ -17,22 +17,26 @@ rm .codexignore
 for direction in push pull; do
 	run "$direction"
 	has "--exclude-from=$tmp/parent space/near/.codexignore"
-	has "$tmp/parent space/near/demo/"
-	has 'codex:~/demo/'
+	has "$tmp/parent space/near/"
+	has 'codex:~/near/'
 	if has "--exclude-from=$tmp/parent space/.codexignore"; then exit 1; fi
 done
 ok 'nearest inherited ignore wins, preserving spaces'
 rm "$tmp/parent space/near/.codexignore"
-run push
-has "--exclude-from=$tmp/parent space/.codexignore"
-ok 'walks multiple local parent directories'
+for direction in push pull; do
+	reject "$direction"
+	[[ ! -e $LOG.ssh ]]
+	grep -Fq 'Invalid project name: parent space' "$tmp/err"
+done
+ok 'validates marker root basename rather than invocation basename'
+touch "$tmp/parent space/near/.codexignore"
 ln -s "$tmp/parent space/near/demo" "$tmp/launch/linked"
 cd "$tmp/launch/linked"
 run push
-has "--exclude-from=$tmp/parent space/.codexignore"
-has "$tmp/parent space/near/demo/"
-has 'codex:~/demo/'
-ok 'symlinked cwd searches physical parents and preserves the cwd transfer root'
+has "--exclude-from=$tmp/parent space/near/.codexignore"
+has "$tmp/parent space/near/"
+has 'codex:~/near/'
+ok 'symlinked cwd searches physical parents and uses the physical marker root'
 cd "$tmp/parent space/near/demo"
 for direction in push pull; do
 	mkdir .codexignore
@@ -43,13 +47,14 @@ for direction in push pull; do
 	reject "$direction"
 	[[ ! -e $LOG.ssh ]]
 	rm .codexignore
-	printf '!\n' >"$tmp/parent space/.codexignore"
+	printf '!\n' >"$tmp/parent space/near/.codexignore"
 	reject "$direction"
 	[[ ! -e $LOG.ssh ]]
-	printf 'parent/\n' >"$tmp/parent space/.codexignore"
+	grep -Fq 'Ignore file cannot clear mandatory exclusions' "$tmp/err"
+	printf 'nearest/\n' >"$tmp/parent space/near/.codexignore"
 done
 ok 'invalid nearest entries and inherited clearing rules fail before SSH or rsync'
-rm "$tmp/parent space/.codexignore"
+rm "$tmp/parent space/.codexignore" "$tmp/parent space/near/.codexignore"
 # Do not modify shared ancestor files just to manufacture a missing-file case.
 if [[ ! -e /tmp/.codexignore && ! -L /tmp/.codexignore && ! -e /.codexignore && ! -L /.codexignore ]]; then
 	for direction in push pull; do

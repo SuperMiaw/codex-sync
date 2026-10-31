@@ -33,9 +33,9 @@ Create the configuration directory before adding files.
 
 ## Usage
 
-Both local and remote project directories must already exist. Run from the local directory you want to synchronize; its basename is the remote project name. The remote directory is always `~/<name>` on the configured host. Project-name arguments and global folder discovery are not supported.
+Both local and remote project directories must already exist. Run from the local project directory or any subdirectory. The nearest `.codexignore` found in the physical current directory or its parents marks the synchronization root; that directory’s basename is the remote project name. The remote directory is always `~/<name>` on the configured host. Project-name arguments and global folder discovery are not supported.
 
-The current directory's name may contain ASCII letters, digits, underscores, hyphens, and internal dots. Synchronizing the filesystem root or your home directory is prohibited.
+The synchronization root's name may contain ASCII letters, digits, underscores, hyphens, and internal dots. Synchronizing the filesystem root or your home directory is prohibited.
 
 ```bash
 cpush                        # Push the current project
@@ -50,7 +50,7 @@ Both wrappers accept `--dry-run` and `--no-delete`, which can be combined. Equiv
 
 ## .codexignore and secrets
 
-Every local project needs a readable `.codexignore` file in its directory or a parent, even for pulls. An empty file is valid. The search walks upward through physical parent directories, without changing the directory being transferred. Only the nearest file is used; an invalid nearest file prevents synchronization.
+Every local project needs a readable `.codexignore` file in its directory or a parent, even for pulls. An empty file is valid. The search walks upward through physical parent directories. The entire directory containing the nearest `.codexignore` is transferred, even when you invoke the command from a subdirectory. Only the nearest file is used; an invalid nearest file prevents synchronization.
 
 For example, create `.codexignore` in your project with:
 
@@ -63,7 +63,7 @@ node_modules/
 build/
 ```
 
-Patterns use rsync exclusion syntax relative to the project being transferred, including when inherited from a parent. They apply in both directions and combine with the optional global `ignore` file. The list-clearing `!` rule is not allowed.
+Patterns use rsync exclusion syntax relative to the synchronization root. They apply in both directions and combine with the optional global `ignore` file. The list-clearing `!` rule is not allowed.
 
 Only `.git/`, `.ssh/`, and `.codexignore` are automatically excluded. **Other credentials, private keys, environment files, and secrets are not automatically detected or excluded.** Review your project, add appropriate exclusions, and preview with `cpush --dry-run`. Exclusion rules and dry runs do not guarantee that secrets cannot be transferred.
 

@@ -18,6 +18,7 @@ reject push --unknown
 ok 'valid inferred internal dots and rejected positional arguments and unknown options'
 for name in 'bad name' 'x;touch' '.hidden' 'trailing.'; do
 	mkdir "$tmp/work/$name"
+	touch "$tmp/work/$name/.codexignore"
 	cd "$tmp/work/$name"
 	reject push
 	[[ ! -e $LOG.ssh ]]

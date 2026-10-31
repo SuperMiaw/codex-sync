@@ -14,7 +14,7 @@ fail() {
 	exit 1
 }
 usage() {
-	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync --help | --version'
+	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.'
 }
 valid_name() { [[ $1 =~ ^[a-zA-Z0-9_-]([a-zA-Z0-9_.-]*[a-zA-Z0-9_-])?$ ]]; }
 optional_file() {
@@ -66,10 +66,6 @@ optional_file "$config/target-host"
 if [[ -f $config/target-host ]]; then host=$(cat -- "$config/target-host"); fi
 [[ $host =~ ^([a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || fail 'Invalid target-host: expected one SSH host name or alias'
 local_dir=$(pwd -P) || fail 'Cannot resolve local project'
-project=${local_dir##*/}
-valid_name "$project" || fail "Invalid project name: $project"
-home_dir=$(cd -- "$HOME" && pwd -P) || fail 'Cannot resolve home directory'
-[[ $local_dir != / && $local_dir != "$home_dir" ]] || fail 'Refusing to synchronize filesystem root or home directory'
 # Walk physical local parents only; an invalid nearest entry must not be skipped.
 ignore_dir=$local_dir
 project_ignore=''
@@ -84,6 +80,11 @@ while :; do
 	[[ -n $ignore_dir ]] || ignore_dir=/
 done
 [[ -n $project_ignore && -f $project_ignore && -r $project_ignore ]] || fail "Required local project ignore file is missing or not a readable regular file: ${project_ignore:-$local_dir/.codexignore} (searched local project and parents; create it; an empty file is valid)"
+local_dir=$ignore_dir
+project=${local_dir##*/}
+home_dir=$(cd -- "$HOME" && pwd -P) || fail 'Cannot resolve home directory'
+[[ $local_dir != / && $local_dir != "$home_dir" ]] || fail 'Refusing to synchronize filesystem root or home directory'
+valid_name "$project" || fail "Invalid project name: $project"
 excludes=()
 for pattern in '.git/' '.ssh/' '.codexignore'; do
 	excludes+=("--exclude=$pattern")
