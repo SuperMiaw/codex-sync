@@ -2,7 +2,7 @@
 # codex-sync
 set -euo pipefail
 
-readonly VERSION=0.1.0
+readonly VERSION=1.2.0
 
 diagnostic() {
 	local color=$1 message=$2
