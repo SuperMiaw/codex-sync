@@ -1,6 +1,6 @@
 # codex-sync
 
-Synchronize existing local project directories with matching directories on a remote host over SSH and rsync. Use `cpush` for local → remote and `cpull` for remote → local.
+Synchronize existing local project directories with matching directories on a remote host over SSH and rsync.
 
 **Requirements:** Debian/Linux, Bash, OpenSSH, and rsync. The remote host must be accessible over SSH and have rsync installed.
 
@@ -12,13 +12,12 @@ From the source directory:
 ./install.sh
 ```
 
-Installs `codex-sync`, `cpush`, and `cpull` into `~/.local/bin` without sudo or changes to your shell configuration. Ensure that directory is in your `PATH`:
+Files are installed from `./bin` into `~/.local/bin` and doesn't require `sudo`. It won't change your shell configuration.
 
+Ensure that directory is in your `PATH`:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
-
-Identical installed commands are left untouched. Updating existing codex-sync scripts prompts for confirmation (`[y/N]`); unrelated files and symlinks get a collision warning and a separate replacement confirmation. All confirmations happen before installation changes. Use `./install.sh --force` for explicit noninteractive updates or replacements. Configuration files are not managed by the installer.
 
 ## Configuration
 
@@ -29,43 +28,47 @@ Optional configuration files live in `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sy
 | `target-host` | SSH host name or alias; defaults to `codex` | `my-sandbox` |
 | `ignore` | Global rsync exclusion patterns, one per line | `*.log` |
 
-Create the configuration directory before adding files.
+### target-host
 
-[samples/ignore](samples/ignore) is an optional example global ignore file, provided as inspiration only. It is not exhaustive; review patterns for your own files before use. Samples are never installed, copied, or automatically activated by codex-sync.
+It is recommanded to use "~/.ssh/config" for simplify and an ssh agent like [danielrobbins/keychain](danielrobbins/keychain).
+
+Exemple:
+```
+Host codex
+  HostName 192.168.254.1
+  Port 22
+  User codex
+```
+
+### ignore
+
+You can use a global `ignore` in addition to mandatory local `.codexignore`.
+
+See [samples/ignore](samples/ignore) for example global patterns. Samples are not activated automatically; review them for your own files.
 
 ## Usage
 
-The local project directory must already exist. If the remote destination is missing, interactive push explicitly offers to create it over SSH with default No (`[y/N]`), then continues only after successful creation and validation. Declining, noninteractive use, or SSH failure stops the push. Pull never creates remote directories; `--dry-run` reports a missing remote directory and stops without creating it. Run from the local project directory or any subdirectory. The nearest `.codexignore` found in the physical current directory or its parents marks the synchronization root; that directory’s basename is the remote project name. The remote directory is always `~/<name>` on the configured host. Project-name arguments and global folder discovery are not supported.
-
-The synchronization root's name may contain ASCII letters, digits, underscores, hyphens, and internal dots. Synchronizing the filesystem root or your home directory is prohibited.
-
 ```bash
-cpush                        # Push the current project
-cpull                        # Pull the current project
+cpush                        # Push the current project folder
+cpull                        # Pull the current project folder
 cpush --dry-run              # Preview changes, including planned deletions
 cpull --no-delete            # Pull while preserving destination-only files
-codex-sync inspect            # Show local exclusion rules and their sources
+codex-sync inspect           # Show local exclusion rules and their sources
 ```
-
-Both wrappers accept `--dry-run` and `--no-delete`, which can be combined. Equivalent commands are `codex-sync push` and `codex-sync pull`; use `codex-sync --help` for help.
 
 **Both push and pull delete destination-only files by default. Deletions may be permanent.** Preview with `--dry-run` before syncing, or use `--no-delete` to preserve destination-only files. Excluded destination files are preserved.
 
 ## .codexignore and secrets
 
-Every local project needs a readable `.codexignore` file in its directory or a parent, even for pulls. An empty file is valid. The search walks upward through physical parent directories. The entire directory containing the nearest `.codexignore` is transferred, even when you invoke the command from a subdirectory. Only the nearest file is used; an invalid nearest file prevents synchronization.
+Every project must have an explicit file `.codexignore`, even for pulls. For commodity, like `git` it will resolved if it exist in parent folder.
 
-When no `.codexignore` is found, interactive push/pull offers to create an empty file with default No (`[y/N]`). The suggested location is the nearest Git worktree root when available, otherwise the physical current directory. Git is optional and only supplies this hint. After creation, the command stops: review sensitive files and add exclusions, then rerun. Noninteractive commands never create the file; create and review it manually. `inspect` never offers creation.
+Patterns use rsync exclusion syntax relative to the synchronization root. Exclusion can only be added; by design the list-clearing `!` rule is not allowed.
 
-See [samples/codexignore](samples/codexignore) for a minimal project-specific example, provided as inspiration only. Its `/local-notes.txt` pattern excludes that file at the synchronization root. The sample is not exhaustive; review your project and choose appropriate patterns before use.
+Global ignore rules can be disabled, add `# codex-sync: no-global-ignore` on its own line in the project `.codexignore`. Surrounding spaces or tabs are allowed. This directive is metadata; ordinary rules in the same file and the built-in exclusions still apply.
 
-Patterns use rsync exclusion syntax relative to the synchronization root. They apply in both directions and combine with the optional global `ignore` file. The list-clearing `!` rule is not allowed.
+`codex-sync inspect` shows the synchronization root and sorted exclusion rules grouped by source. Use `cpush --dry-run` to preview a transfer.
 
-To disable global ignore rules for this synchronization root in both directions, add `# codex-sync: no-global-ignore` on its own line in the selected `.codexignore`. Surrounding spaces or tabs are allowed. This directive is metadata; ordinary rules in the same file and the built-in exclusions still apply.
-
-`codex-sync inspect` shows the synchronization root and exclusion rules under Built-in, Global, and Local headers, with paths shortened to `~` within your home directory. Global rules disabled by the directive show `[disabled]` instead of patterns; an absent global file shows only its path. Sections have no blank separator lines. Labels are bold and `[disabled]` is red only on terminal output when `NO_COLOR` is unset. Patterns are alphabetically sorted within each group. It runs locally without SSH or rsync and does not change files. It lists rules, not which files they match; use `cpush --dry-run` to preview a transfer.
-
-Only `.git/`, `.ssh/`, and `.codexignore` are automatically excluded. **Other credentials, private keys, environment files, and secrets are not automatically detected or excluded.** Review your project, add appropriate exclusions, and preview with `cpush --dry-run`. Exclusion rules and dry runs do not guarantee that secrets cannot be transferred.
+Only `.git/`, `.ssh/`, and `.codexignore` are automatically excluded. **Other credentials, private keys, environment files, and secrets are not automatically detected or excluded.** Review your project, add appropriate exclusions, and preview with `cpush --dry-run`. Exclusion rules and dry runs won't verify that secrets cannot be transferred, it's your own responsability.
 
 ## Uninstallation
 
@@ -75,4 +78,6 @@ From the source directory:
 ./uninstall.sh
 ```
 
-Removes installed commands matching the current source version and preserves modified or unrelated commands. Configuration and project `.codexignore` files are preserved.
+Removes regular installed commands carrying the codex-sync header, including modified copies. Unrelated entries and symlinks are preserved with a warning and a nonzero exit status. Configuration and project `.codexignore` files are preserved by default.
+
+Use `./uninstall.sh --purge` to also offer removal of `${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync` with terminal confirmation; command removal happens before the prompt. Project `.codexignore` files are preserved.

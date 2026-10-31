@@ -63,8 +63,8 @@ no_global_directive() {
 project_patterns() {
 	local pattern
 	while IFS= read -r pattern || [[ -n $pattern ]]; do
-		if [[ ${1:-$project_ignore} != "$project_ignore" ]] || ! no_global_directive "$pattern"; then printf '%s\n' "$pattern"; fi
-	done <"${1:-$project_ignore}"
+		if [[ $1 != "$project_ignore" ]] || ! no_global_directive "$pattern"; then printf '%s\n' "$pattern"; fi
+	done <"$1"
 }
 display_path() {
 	local home=${HOME%/}
@@ -190,7 +190,7 @@ for ignore in "${ignore_files[@]}"; do
 		while IFS= read -r pattern || [[ -n $pattern ]]; do
 			[[ $pattern != '!' && $pattern != $'!\r' ]] || fail "Ignore file cannot clear mandatory exclusions: $ignore"
 		done <"$ignore"
-		if $no_global && [[ $ignore == "$project_ignore" ]]; then
+		if $no_global; then
 			excludes+=(--exclude-from=-)
 		else
 			excludes+=("--exclude-from=$ignore")
@@ -265,7 +265,7 @@ fi
 if $dry_run; then options+=(--dry-run); fi
 printf 'ℹ️ %s: %s -> %s\n' "$command" "$source" "$destination"
 if $no_global; then
-	project_patterns | rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
+	project_patterns "$project_ignore" | rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
 else
 	rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
 fi

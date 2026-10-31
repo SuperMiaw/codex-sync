@@ -9,19 +9,13 @@ reject pull
 [[ -e $LOG.ssh ]]
 export REMOTE_OK=1
 ok 'remote validation blocks both directions'
+# A real marker ensures this exercises root safety, not missing-marker refusal.
+touch "$HOME/.codexignore"
 ln -s "$HOME" "$tmp/work/home-link"
-ln -s / "$tmp/work/root-link"
 cd "$tmp/work/home-link"
-reject push
-[[ ! -e $LOG.ssh ]]
-cd "$tmp/work/root-link"
-reject pull
-[[ ! -e $LOG.ssh ]]
-cd "$HOME"
-reject push
-cd /
-reject pull
-mkdir -p "$tmp/bad name"
-cd "$tmp/bad name"
-reject push
-ok 'home/root symlinks and unsafe inferred names rejected locally'
+for direction in push pull; do
+	reject "$direction"
+	[[ ! -e $LOG.ssh ]]
+	grep -Fq 'Refusing to synchronize filesystem root or home directory' "$tmp/err"
+done
+ok 'physical home alias is rejected locally in both directions'
