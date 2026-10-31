@@ -42,6 +42,7 @@ cpush                        # Push the current project
 cpull                        # Pull the current project
 cpush --dry-run              # Preview changes, including planned deletions
 cpull --no-delete            # Pull while preserving destination-only files
+codex-sync inspect            # Show local exclusion rules and their sources
 ```
 
 Both wrappers accept `--dry-run` and `--no-delete`, which can be combined. Equivalent commands are `codex-sync push` and `codex-sync pull`; use `codex-sync --help` for help.
@@ -66,6 +67,8 @@ build/
 Patterns use rsync exclusion syntax relative to the synchronization root. They apply in both directions and combine with the optional global `ignore` file. The list-clearing `!` rule is not allowed.
 
 To disable global ignore rules for this synchronization root in both directions, add `# codex-sync: no-global-ignore` on its own line in the selected `.codexignore`. Surrounding spaces or tabs are allowed. This directive is metadata; ordinary rules in the same file and the built-in exclusions still apply.
+
+`codex-sync inspect` shows the synchronization root and exclusion rules under Built-in, Global, and Local headers, with paths shortened to `~` within your home directory. Global rules disabled by the directive show `[disabled]` instead of patterns; an absent global file shows only its path. Sections have no blank separator lines. Labels are bold and `[disabled]` is red only on terminal output when `NO_COLOR` is unset. Patterns are alphabetically sorted within each group. It runs locally without SSH or rsync and does not change files. It lists rules, not which files they match; use `cpush --dry-run` to preview a transfer.
 
 Only `.git/`, `.ssh/`, and `.codexignore` are automatically excluded. **Other credentials, private keys, environment files, and secrets are not automatically detected or excluded.** Review your project, add appropriate exclusions, and preview with `cpush --dry-run`. Exclusion rules and dry runs do not guarantee that secrets cannot be transferred.
 

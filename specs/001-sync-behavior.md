@@ -10,6 +10,7 @@ Status: agreed functional specification
 
 - `codex-sync push [options]`: local to remote.
 - `codex-sync pull [options]`: remote to local.
+- `codex-sync inspect`: read-only local inspection; accepts `--help` and `--version`, rejects transfer options and positional arguments. The former `ignore` subcommand is rejected; there is no alias.
 - `cpush` and `cpull`: executable wrappers forwarding all arguments to `codex-sync push` and `codex-sync pull`, respectively.
 - Supported options: `--dry-run`, `--no-delete`, `--help`, `--version`.
 - Preserve the simple `rsync -av` output by default; no extra `--verbose` or automatic `set -x`.
@@ -66,6 +67,30 @@ The selected local `.codexignore` may contain the metadata directive `# codex-sy
 
 If any line matches, skip the global ignore file entirely, including existence/readability and list-clearing validation, for both push and pull. Remove matching metadata lines from the project patterns supplied to rsync; keep every other project rule active, including rejection of the list-clearing `!` rule. Built-in exclusions remain unchanged and mandatory. Directives in the global file or an unselected ancestor marker have no special meaning. Root lookup and both-side validation remain unchanged.
 
+## Local inspection
+
+`codex-sync inspect` shares physical root lookup, root/name safety checks, ignore source selection, directive parsing, and ignore file validation with push/pull. It does not read or validate `target-host`, check remote directories, require SSH/rsync binaries, or invoke either command. It never creates files or directories.
+
+After successful validation, print exactly this layout (with the selected paths and patterns):
+
+```text
+Sync root: ~/my-app
+Built-in:
+  .codexignore
+  .git/
+  .ssh/
+Global: ~/.config/codex-sync/ignore [disabled]
+Local: ~/my-app/.codexignore
+  .env
+  node_modules/
+```
+
+Use the exact labels shown with no blank separator lines, with two spaces before each rule. Always show Global and Local paths on their header lines, including empty sources. An absent optional global file has no status or rule rows. Only a global source disabled by the local directive has the suffix ` [disabled]`; do not inspect that file, even for existence, or display its patterns. Color only `[disabled]` red, with a reset immediately afterward, when stdout is a terminal and `NO_COLOR` is unset. Any value of `NO_COLOR`, including empty, disables color. Under the same ANSI condition, render only the labels `Sync root:`, `Built-in:`, `Global:`, and `Local:` in bold, resetting immediately after each label. Paths and rules remain unstyled. Do not print active statuses, origin tags, duplicate source/effective-rule sections, or a footer.
+
+The root is the physical directory containing the nearest marker. For display only, replace HOME itself with `~` and its strict descendants with `~/...`; do not abbreviate paths that merely share a HOME prefix. Actual paths and synchronization behavior remain unchanged.
+
+Show effective rules once under each origin in built-in/global/local order, sorting alphabetically within each origin (deterministic C-locale byte order), preserving duplicates. Actual rsync rule order and parsing are unchanged. Omit empty lines, lines containing only a carriage return, comments beginning with `#` or `;`, and matching local metadata directives; display other rule text literally, without trimming. Errors use the existing stderr diagnostics and nonzero exit status. This lists configured exclusion rules without evaluating file matches; use a sync dry run for transfer previews.
+
 ## Deletion and preview
 
 Default synchronization uses `rsync -av --delete` to mirror the selected source into the destination. Destination-only files **may be permanently deleted**.
@@ -105,6 +130,7 @@ Use Bash tests with mocked SSH and rsync; no live remote required. Check:
 - nearest ignore lookup: local, inherited, nearest-wins, no file, physical parents, nested invocation transferring the marker directory in both directions, flat remote basename naming, nested markers, validation of marker roots rather than invocation names, unsafe home roots, invalid entries and inherited list-clearing rules;
 - optional global ignores, cumulative ignores, and built-in exclusions;
 - local no-global-ignore directive in both directions: exact case-sensitive matching, surrounding spaces/tabs, LF/CRLF, duplicate directives, final lines without a newline, metadata removal with ordinary rules retained, skipped invalid global files, retained local list-clearing rejection and built-ins, inherited roots, and no effect from near matches or directives in global/unselected ancestor files;
+- local inspection grouping, source paths and inherited roots, XDG configuration, exact compact layout, empty/absent global headers and directive-only [disabled] suffix, HOME abbreviation with strict path boundaries, CRLF and final-line directive handling, shared invalid-file/list-clearing validation, argument rejection, display-only alphabetical ordering within each origin, duplicates, stdout terminal bold section labels, red [disabled] status, and NO_COLOR gating, empty active sources, literal whitespace and ordinary global directive-like rules, rejection of the removed ignore subcommand, and no SSH/rsync calls even with invalid target-host configuration;
 - rejection of list-clearing ignore rules;
 - emoji message prefixes, help describing marker-defined root resolution, unchanged version output, terminal diagnostic colors, redirected diagnostics, `NO_COLOR` including empty values, and unchanged SSH/rsync output (terminal checks require util-linux `script` and are skipped if unavailable);
 - direction, source/destination trailing slash handling, and both-side existence checks;

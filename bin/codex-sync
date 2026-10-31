@@ -14,7 +14,7 @@ fail() {
 	exit 1
 }
 usage() {
-	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.' 'In that file, # codex-sync: no-global-ignore disables global ignore rules.'
+	printf '%s\n' 'Usage: codex-sync <push|pull> [--dry-run] [--no-delete]' '       codex-sync inspect' '       codex-sync --help | --version' '' 'Sync root: directory containing the nearest .codexignore in physical cwd or parents.' 'In that file, # codex-sync: no-global-ignore disables global ignore rules.' 'inspect shows the sync root, source status and effective exclusion rules without SSH or rsync.'
 }
 no_global_directive() {
 	local line=${1%$'\r'}
@@ -25,8 +25,42 @@ no_global_directive() {
 project_patterns() {
 	local pattern
 	while IFS= read -r pattern || [[ -n $pattern ]]; do
-		if ! no_global_directive "$pattern"; then printf '%s\n' "$pattern"; fi
-	done <"$project_ignore"
+		if [[ ${1:-$project_ignore} != "$project_ignore" ]] || ! no_global_directive "$pattern"; then printf '%s\n' "$pattern"; fi
+	done <"${1:-$project_ignore}"
+}
+display_path() {
+	local home=${HOME%/}
+	if [[ $1 == "$HOME" || $1 == "$home" ]]; then
+		printf '~'
+	elif [[ $1 == "$home/"* ]]; then
+		printf '%s/%s' '~' "${1#"$home/"}"
+	else
+		printf '%s' "$1"
+	fi
+}
+display_sorted_patterns() {
+	# Sort only report rows, using a deterministic bytewise A-Z order.
+	local LC_ALL=C pattern i
+	local -a rows=()
+	while IFS= read -r pattern; do
+		i=${#rows[@]}
+		while ((i > 0)) && [[ ${rows[i - 1]} > $pattern ]]; do
+			rows[i]=${rows[i - 1]}
+			i=$((i - 1))
+		done
+		rows[i]=$pattern
+	done
+	for pattern in "${rows[@]}"; do printf '  %s\n' "$pattern"; done
+}
+display_patterns() {
+	local pattern
+	while IFS= read -r pattern; do
+		# rsync exclude-from files ignore empty lines and leading # or ; comments.
+		case $pattern in
+		'' | $'\r' | \#* | \;*) continue ;;
+		esac
+		printf '%s\n' "$pattern"
+	done < <(project_patterns "$1") | display_sorted_patterns
 }
 valid_name() { [[ $1 =~ ^[a-zA-Z0-9_-]([a-zA-Z0-9_.-]*[a-zA-Z0-9_-])?$ ]]; }
 optional_file() {
@@ -48,11 +82,11 @@ case $1 in
 	printf 'codex-sync 0.1.0\n'
 	exit 0
 	;;
-push | pull)
-	direction=$1
+push | pull | inspect)
+	command=$1
 	shift
 	;;
-*) fail "Expected push or pull (see --help)" ;;
+*) fail "Expected push, pull or inspect (see --help)" ;;
 esac
 dry_run=false
 delete=true
@@ -66,17 +100,19 @@ for arg in "$@"; do
 		printf 'codex-sync 0.1.0\n'
 		exit 0
 		;;
-	--dry-run) dry_run=true ;;
-	--no-delete) delete=false ;;
+	--dry-run)
+		[[ $command != inspect ]] || fail "Unsupported option for inspect: $arg"
+		dry_run=true
+		;;
+	--no-delete)
+		[[ $command != inspect ]] || fail "Unsupported option for inspect: $arg"
+		delete=false
+		;;
 	--*) fail "Unknown option: $arg" ;;
 	*) fail "Unexpected argument: $arg (run from the project directory)" ;;
 	esac
 done
 config=${XDG_CONFIG_HOME:-$HOME/.config}/codex-sync
-host=codex
-optional_file "$config/target-host"
-if [[ -f $config/target-host ]]; then host=$(cat -- "$config/target-host"); fi
-[[ $host =~ ^([a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || fail 'Invalid target-host: expected one SSH host name or alias'
 local_dir=$(pwd -P) || fail 'Cannot resolve local project'
 # Walk physical local parents only; an invalid nearest entry must not be skipped.
 ignore_dir=$local_dir
@@ -98,7 +134,8 @@ home_dir=$(cd -- "$HOME" && pwd -P) || fail 'Cannot resolve home directory'
 [[ $local_dir != / && $local_dir != "$home_dir" ]] || fail 'Refusing to synchronize filesystem root or home directory'
 valid_name "$project" || fail "Invalid project name: $project"
 excludes=()
-for pattern in '.git/' '.ssh/' '.codexignore'; do
+builtin_patterns=('.git/' '.ssh/' '.codexignore')
+for pattern in "${builtin_patterns[@]}"; do
 	excludes+=("--exclude=$pattern")
 done
 no_global=false
@@ -121,6 +158,28 @@ for ignore in "${ignore_files[@]}"; do
 		fi
 	fi
 done
+# Validation and source selection above are shared with both transfer directions.
+if [[ $command == inspect ]]; then
+	bold='' reset='' red=''
+	if [[ -t 1 && ! ${NO_COLOR+x} ]]; then
+		bold=$'\033[1m' reset=$'\033[0m' red=$'\033[31m'
+	fi
+	printf '%sSync root:%s %s\n%sBuilt-in:%s\n' "$bold" "$reset" "$(display_path "$local_dir")" "$bold" "$reset"
+	printf '%s\n' "${builtin_patterns[@]}" | display_sorted_patterns
+	printf '%sGlobal:%s %s' "$bold" "$reset" "$(display_path "$config/ignore")"
+	if $no_global; then
+		printf ' %s[disabled]%s' "$red" "$reset"
+	fi
+	printf '\n'
+	if ! $no_global && [[ -f $config/ignore ]]; then display_patterns "$config/ignore"; fi
+	printf '%sLocal:%s %s\n' "$bold" "$reset" "$(display_path "$project_ignore")"
+	display_patterns "$project_ignore"
+	exit 0
+fi
+host=codex
+optional_file "$config/target-host"
+if [[ -f $config/target-host ]]; then host=$(cat -- "$config/target-host"); fi
+[[ $host =~ ^([a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || fail 'Invalid target-host: expected one SSH host name or alias'
 command -v ssh >/dev/null || fail 'OpenSSH client (ssh) is required'
 command -v rsync >/dev/null || fail 'rsync is required'
 # Project names contain no shell syntax. Reject remote symlinks resolving to / or HOME.
@@ -130,7 +189,7 @@ remote_check="p=\"\$HOME/$project\"; test -d \"\$p\" && r=\$(cd -- \"\$p\" && pw
 ssh "$host" "$remote_check" || fail "Remote project missing, unsafe, or inaccessible: $host:~/$project"
 local_path=$local_dir/
 remote_path="$host:~/$project/"
-if [[ $direction == push ]]; then
+if [[ $command == push ]]; then
 	source=$local_path
 	destination=$remote_path
 else
@@ -143,7 +202,7 @@ if $delete; then
 	if ! $dry_run; then diagnostic 33 '⚠️ Sync will delete destination-only files.'; fi
 fi
 if $dry_run; then options+=(--dry-run); fi
-printf 'ℹ️ %s: %s -> %s\n' "$direction" "$source" "$destination"
+printf 'ℹ️ %s: %s -> %s\n' "$command" "$source" "$destination"
 if $no_global; then
 	project_patterns | rsync "${options[@]}" "${excludes[@]}" -- "$source" "$destination"
 else

@@ -9,7 +9,7 @@ run push
 [[ $(cat "$tmp/err") == '⚠️ Sync will delete destination-only files.' ]]
 [[ $(cat "$tmp/out") != *"$escape"* ]]
 reject invalid
-[[ $(cat "$tmp/err") == '❌ codex-sync: Expected push or pull (see --help)' ]]
+[[ $(cat "$tmp/err") == '❌ codex-sync: Expected push, pull or inspect (see --help)' ]]
 ok 'redirected warnings and errors contain no color'
 
 if ! command -v script >/dev/null; then
@@ -24,6 +24,8 @@ set -euo pipefail
 case $COLOR_CASE in
 warning) exec "$COLOR_COMMAND" push >"$COLOR_STDOUT" ;;
 error) exec "$COLOR_COMMAND" invalid >"$COLOR_STDOUT" ;;
+inspect) exec "$COLOR_COMMAND" inspect ;;
+inspect-redirected) exec "$COLOR_COMMAND" inspect >"$COLOR_STDOUT" ;;
 redirected) exec "$COLOR_COMMAND" push 2>"$COLOR_STDERR" ;;
 esac
 RUNNER
@@ -36,7 +38,7 @@ terminal warning
 [[ $(cat "$tmp/terminal") == *"${escape}[33m⚠️ Sync will delete destination-only files.${escape}[0m"* ]]
 [[ $(cat "$tmp/stdout") != *"$escape"* ]]
 if terminal error; then exit 1; fi
-[[ $(cat "$tmp/terminal") == *"${escape}[31m❌ codex-sync: Expected push or pull (see --help)${escape}[0m"* ]]
+[[ $(cat "$tmp/terminal") == *"${escape}[31m❌ codex-sync: Expected push, pull or inspect (see --help)${escape}[0m"* ]]
 ok 'terminal stderr colors warnings yellow and errors red with resets'
 for value in '' 1; do
 	export NO_COLOR=$value
@@ -50,6 +52,34 @@ terminal redirected
 [[ $(cat "$tmp/stderr") != *"$escape"* ]]
 [[ $(cat "$tmp/terminal") != *"$escape"* ]]
 ok 'NO_COLOR including empty values and redirected stderr disable color'
+
+# Compare the whole terminal report to plain output with label and status escapes added.
+for state in active absent disabled; do
+	case $state in
+	active) printf 'zebra/\nAlpha/\n' >"$XDG_CONFIG_HOME/codex-sync/ignore" ;;
+	absent) rm "$XDG_CONFIG_HOME/codex-sync/ignore" ;;
+	disabled) printf '# codex-sync: no-global-ignore\n' >.codexignore ;;
+	esac
+	run inspect
+	[[ $(cat "$tmp/out") != *"$escape"* ]]
+	# Only section labels and the directive-disabled Global suffix gain ANSI styling.
+	sed -e "s/^\(Sync root:\|Built-in:\|Global:\|Local:\)/${escape}[1m\1${escape}[0m/" \
+		-e "s/\[disabled\]/${escape}[31m[disabled]${escape}[0m/" "$tmp/out" >"$tmp/expected-color"
+	terminal inspect
+	tr -d '\r' <"$tmp/terminal" >"$tmp/actual-color"
+	cmp "$tmp/expected-color" "$tmp/actual-color"
+	for value in '' 1; do
+		export NO_COLOR=$value
+		terminal inspect
+		tr -d '\r' <"$tmp/terminal" >"$tmp/plain-terminal"
+		cmp "$tmp/out" "$tmp/plain-terminal"
+	done
+	unset NO_COLOR
+	terminal inspect-redirected
+	cmp "$tmp/out" "$tmp/stdout"
+
+done
+ok 'inspect bolds only labels and colors [disabled] on terminal stdout; NO_COLOR and redirection preserve plain text'
 
 # External output must pass through verbatim, including its own escape codes.
 cat >"$tmp/mock/rsync" <<'MOCK'
