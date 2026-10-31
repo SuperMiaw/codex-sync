@@ -6,13 +6,20 @@ Synchronize existing local project directories with matching directories on a re
 
 ## Installation
 
-From the source directory:
+Download `codex-sync-X.Y.Z.run` from this repository's **Releases** page, then run it (replace `X.Y.Z` with the release version):
+
+```bash
+chmod +x codex-sync-X.Y.Z.run
+./codex-sync-X.Y.Z.run
+```
+
+Alternatively, from the source directory:
 
 ```bash
 ./install.sh
 ```
 
-Files are installed from `./bin` into `~/.local/bin` and doesn't require `sudo`. It won't change your shell configuration.
+Both methods use the same installer and copy the commands into `~/.local/bin` without `sudo` or changes to your shell configuration.
 
 Ensure that directory is in your `PATH`:
 ```bash
